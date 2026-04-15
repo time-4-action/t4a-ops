@@ -1,0 +1,35 @@
+# Patrik services — Metakocka ERP integration
+# Server path: /data/patrik/, /data/patrik-products/
+# Ports: 3000 (API), 3001 (products automation), 3002 (products UI)
+
+services:
+  patrik-api:
+    image: etiamsi/patrik-metakocka-automation-api:latest
+    container_name: patrik-api
+    ports:
+      - "3000:3000"
+    volumes:
+      - /data/patrik:/data
+    restart: unless-stopped
+    # Cron: warehouseSync every 15 min (configured in /data/patrik/cron.json)
+
+  patrik-products-automation:
+    image: etiamsi/patrik-products-automation:latest
+    pull_policy: always
+    container_name: patrik-products-automation-app
+    ports:
+      - "3001:3000"
+    volumes:
+      - /data/patrik-products:/data
+
+  patrik-products-ui:
+    image: etiamsi/patrik-products-ui
+    container_name: patrik-products-ui
+    ports:
+      - "3002:3000"
+    environment:
+      PRODUCT_API_URL: https://product.t4a.etiam.si/api
+      GMAIL_EMAIL: ${GMAIL_EMAIL}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+    pull_policy: always
+    restart: unless-stopped

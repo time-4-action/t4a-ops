@@ -1,0 +1,23 @@
+# T4A Export Services (API + UI)
+# Server path: /data/stack/apps/time-4-action/export/
+# Ports: 3001 (API), 3002 (UI)
+
+services:
+  t4a-export-api:
+    image: etiamsi/t4a-export-api
+    pull_policy: always
+    container_name: t4a-export-api
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - /data/stack/apps/time-4-action/export/api/data:/data
+
+  t4a-export-ui:
+    image: etiamsi/patrik-products-ui
+    pull_policy: always
+    ports:
+      - "3002:3000"
+    env_file:
+      - .env
+    restart: unless-stopped

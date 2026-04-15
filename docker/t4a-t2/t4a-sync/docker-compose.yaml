@@ -1,0 +1,17 @@
+# T4A Sync Service — Warehouse & product synchronization
+# Server path: /data/stack/apps/time-4-action/sync/
+# Port: 3000
+# Cron: warehouseSync every 15 min, productSync every 3h
+
+services:
+  patrik-api:
+    image: etiamsi/patrik-metakocka-automation-api:latest
+    container_name: patrik-api
+    ports:
+      - "3000:3000"
+    volumes:
+      - /data/stack/apps/time-4-action/sync:/data
+    restart: unless-stopped
+    # Cron config in /data/stack/apps/time-4-action/sync/cron.json:
+    #   warehouseSync: "0,15,30,45 * * * *"
+    #   productSync:   "0 2-23/3 * * 1,2,3,4,5,6,0"

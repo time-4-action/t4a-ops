@@ -1,0 +1,15 @@
+# T4A AI Agent Chat Interface
+# Server path: /data/stack/apps/time-4-action/chat/
+# Port: 3003
+# Domain: chat.time-4-action.com
+
+services:
+  ai-agent-ui:
+    image: etiamsi/t4a-ai-agent-ui:latest
+    ports:
+      - "3003:3000"
+    env_file:
+      - .env.local
+    environment:
+      AUTH0_BASE_URL: https://chat.time-4-action.com
+    restart: unless-stopped
