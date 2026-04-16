@@ -1,21 +1,22 @@
 # Runbook: WordPress Multi-Site Provisioning (nginx + PHP-FPM + MariaDB)
 
 > **Server:** t4a-t2 (AlmaLinux 9)  
-> **Stack:** nginx · PHP 8.5 (Remi) · MariaDB · WordPress  
-> **Mount:** `/var/www/t4a/` on `/dev/vdc` (ext4 block volume)
+> **Stack:** nginx · PHP 8.5 (Remi) · MariaDB 10.5.29 · WordPress  
+> **Mount:** `/dev/vdc` → `/mnt/vdc` (ext4 block volume, shared with MariaDB)  
+> **Web root:** `/mnt/vdc/www/t4a/`
 
 ## Symptoms
 
 - New WordPress site needs to be provisioned on the T4A instance
 - Existing WordPress site is returning 403/502/blank page after setup
 - PHP-FPM or MariaDB not running after server reboot
-- Block volume `/var/www/t4a/` not mounted
+- Block volume `/mnt/vdc` not mounted (WordPress files at `/mnt/vdc/www/t4a/`)
 
 ## Diagnosis
 
 1. Check block volume is mounted:
    ```bash
-   df -h /var/www/t4a
+   df -h /mnt/vdc
    blkid /dev/vdc
    ```
 
@@ -37,7 +38,7 @@
 
 5. Check SELinux context on web root:
    ```bash
-   ls -Z /var/www/t4a/
+   ls -Z /mnt/vdc/www/t4a/
    getenforce
    ```
 
@@ -51,23 +52,39 @@ These steps configure the base stack. Skip to **Section B** if the server is alr
 
 #### A1. Mount the block volume
 
+The block volume `/dev/vdc` is shared between MariaDB data and web files.
+
 ```bash
 # Verify device and filesystem
 blkid /dev/vdc
-# Expected: UUID="346c682e-7f9e-4d2e-80ad-28d8c90f5004" TYPE="ext4"
 
-mkdir -p /var/www/t4a
-mount /dev/vdc /var/www/t4a
+# Create mount point and subdirectories
+mkdir -p /mnt/vdc
+mount /dev/vdc /mnt/vdc
+mkdir -p /mnt/vdc/mysql
+mkdir -p /mnt/vdc/www/t4a
 
 # Persist across reboots
-echo "UUID=346c682e-7f9e-4d2e-80ad-28d8c90f5004  /var/www/t4a  ext4  defaults  0  2" >> /etc/fstab
+echo "/dev/vdc  /mnt/vdc  ext4  defaults  0  2" >> /etc/fstab
 
 # Validate fstab (catches errors before reboot)
 mount -a
-df -h /var/www/t4a
+df -h /mnt/vdc
+
+# Set ownership
+chown -R mysql:mysql /mnt/vdc/mysql
+chmod 750 /mnt/vdc/mysql
+chown -R nginx:nginx /mnt/vdc/www/t4a
 ```
 
-> **Why UUID over /dev/vdc?** OpenStack block devices can reorder between reboots. UUID is stable.
+Resulting layout:
+
+```
+/mnt/vdc/
+├── mysql/       ← MariaDB datadir (see mariadb-maintenance runbook)
+└── www/
+    └── t4a/     ← WordPress web root
+```
 
 #### A2. Install PHP 8.5 via Remi
 
@@ -115,11 +132,15 @@ systemctl reload php-fpm
 
 #### A4. Install and secure MariaDB
 
+See [MariaDB maintenance runbook](./mariadb-maintenance.md) for full setup, custom datadir/socket config, and SELinux labeling.
+
 ```bash
 dnf install -y mariadb-server mariadb
 systemctl enable --now mariadb
 mysql_secure_installation
 ```
+
+> MariaDB datadir is `/mnt/vdc/mysql/` with socket at `/mnt/vdc/mysql/mysql.sock`. Both `mariadb-server.cnf` and `client.cnf` must reference this socket path.
 
 #### A5. Open firewall ports
 
@@ -132,14 +153,18 @@ firewall-cmd --reload
 #### A6. Set SELinux contexts
 
 ```bash
-# Allow nginx to serve from /var/www/t4a
-semanage fcontext -a -t httpd_sys_content_t "/var/www/t4a(/.*)?"
-restorecon -Rv /var/www/t4a
+dnf install -y policycoreutils-python-utils
+
+# Allow nginx to serve from /mnt/vdc/www
+semanage fcontext -a -t httpd_sys_content_t "/mnt/vdc/www(/.*)?"
+restorecon -Rv /mnt/vdc/www
 
 # Allow writes to upload dirs (run per site after WordPress install)
-semanage fcontext -a -t httpd_sys_rw_content_t "/var/www/t4a/.*/wp-content/uploads(/.*)?"
-restorecon -Rv /var/www/t4a
+semanage fcontext -a -t httpd_sys_rw_content_t "/mnt/vdc/www/t4a/.*/wp-content/uploads(/.*)?"
+restorecon -Rv /mnt/vdc/www/t4a
 ```
+
+> MariaDB SELinux contexts are handled separately — see [MariaDB runbook](./mariadb-maintenance.md).
 
 ---
 
@@ -164,9 +189,9 @@ FLUSH PRIVILEGES;
 cd /tmp
 curl -O https://wordpress.org/latest.tar.gz
 tar -xzf latest.tar.gz
-cp -r wordpress/* /var/www/t4a/<site.domain.com>/
+cp -r wordpress/* /mnt/vdc/www/t4a/<site.domain.com>/
 
-cd /var/www/t4a/<site.domain.com>
+cd /mnt/vdc/www/t4a/<site.domain.com>
 cp wp-config-sample.php wp-config.php
 ```
 
@@ -185,10 +210,10 @@ define( 'DB_CHARSET',  'utf8mb4' );
 #### B3. Set permissions
 
 ```bash
-chown -R nginx:nginx /var/www/t4a/<site.domain.com>
-find /var/www/t4a/<site.domain.com> -type d -exec chmod 755 {} \;
-find /var/www/t4a/<site.domain.com> -type f -exec chmod 644 {} \;
-chmod 600 /var/www/t4a/<site.domain.com>/wp-config.php
+chown -R nginx:nginx /mnt/vdc/www/t4a/<site.domain.com>
+find /mnt/vdc/www/t4a/<site.domain.com> -type d -exec chmod 755 {} \;
+find /mnt/vdc/www/t4a/<site.domain.com> -type f -exec chmod 644 {} \;
+chmod 600 /mnt/vdc/www/t4a/<site.domain.com>/wp-config.php
 ```
 
 #### B4. Create nginx vhost
@@ -200,7 +225,7 @@ server {
     listen 80;
     server_name <site.domain.com> www.<site.domain.com>;
 
-    root /var/www/t4a/<site.domain.com>;
+    root /mnt/vdc/www/t4a/<site.domain.com>;
     index index.php index.html;
 
     # WordPress permalink support
@@ -253,15 +278,18 @@ certbot --nginx -d <site.domain.com> -d www.<site.domain.com>
 ## Directory Structure
 
 ```
-/var/www/t4a/
-├── site1.domain.com/        # WordPress root for site 1
-│   ├── wp-admin/
-│   ├── wp-content/
-│   ├── wp-includes/
-│   └── wp-config.php
-├── site2.domain.com/        # WordPress root for site 2
-│   └── ...
-└── ...
+/mnt/vdc/                            # Block volume (/dev/vdc)
+├── mysql/                           # MariaDB datadir (see mariadb-maintenance runbook)
+└── www/
+    └── t4a/
+        ├── site1.domain.com/        # WordPress root for site 1
+        │   ├── wp-admin/
+        │   ├── wp-content/
+        │   ├── wp-includes/
+        │   └── wp-config.php
+        ├── site2.domain.com/        # WordPress root for site 2
+        │   └── ...
+        └── ...
 ```
 
 Each site is a **separate WordPress install** (not WordPress Multisite). This isolates sites, allows per-site vhosts, and simplifies per-site backups.
@@ -278,7 +306,7 @@ Each site is a **separate WordPress install** (not WordPress Multisite). This is
   ```
 - Check block volume is mounted:
   ```bash
-  df -h /var/www/t4a
+  df -h /mnt/vdc
   ```
 - Check nginx error logs per site:
   ```bash
@@ -293,7 +321,7 @@ Each site is a **separate WordPress install** (not WordPress Multisite). This is
 
 - **Bad fstab entry:** Boot into rescue mode, fix `/etc/fstab`, reboot. Always validate with `mount -a` before rebooting.
 - **PHP upgrade broke sites:** Downgrade via `dnf module reset php && dnf module enable php:remi-8.4 && dnf update php*`, then restart php-fpm.
-- **Remove a WordPress site:** Drop the DB (`DROP DATABASE wp_<sitename>`), remove the directory (`rm -rf /var/www/t4a/<site.domain.com>`), delete the nginx vhost, reload nginx.
+- **Remove a WordPress site:** Drop the DB (`DROP DATABASE wp_<sitename>`), remove the directory (`rm -rf /mnt/vdc/www/t4a/<site.domain.com>`), delete the nginx vhost, reload nginx.
 
 ## Escalation
 

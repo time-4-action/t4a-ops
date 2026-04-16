@@ -13,9 +13,9 @@ The T4A ecosystem runs on the **T4A T2** cloud instance (AlmaLinux 9, OpenStack)
 - **T4A Platform** — Admin dashboard, AI chat agent, export services, sync services
 - **T4A MCP** — AI-powered search server (FastAPI + ChromaDB + BM25)
 - **Certbot** — SSL certificate management (Let's Encrypt via Cloudflare DNS)
-- **WordPress** — Multi-site WordPress hosting (nginx + PHP 8.5 FPM + MariaDB)
+- **WordPress** — Multi-site WordPress hosting (nginx + PHP 8.5 FPM + MariaDB 10.5.29)
 
-Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack, all behind nginx reverse proxy. WordPress sites live on a dedicated block volume at `/var/www/t4a/`.
+Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack, all behind nginx reverse proxy. Block volume `/dev/vdc` mounted at `/mnt/vdc` — shared between MariaDB data and WordPress sites (`/mnt/vdc/www/t4a/`).
 
 ## Directory layout
 

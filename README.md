@@ -40,10 +40,12 @@ Docker services run as independent Compose stacks behind an nginx reverse proxy 
     ├── mcp/                          # MCP + ChromaDB
     └── sync/                         # t4a-sync
 
-/var/www/t4a/                         # Block volume (/dev/vdc)
-├── <site1.domain.com>/               # WordPress site 1
-├── <site2.domain.com>/               # WordPress site 2
-└── ...
+/mnt/vdc/                             # Block volume (/dev/vdc)
+├── mysql/                            # MariaDB datadir
+└── www/t4a/
+    ├── <site1.domain.com>/           # WordPress site 1
+    ├── <site2.domain.com>/           # WordPress site 2
+    └── ...
 ```
 
 ### Cron jobs
