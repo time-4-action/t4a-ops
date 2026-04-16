@@ -1,5 +1,32 @@
 # Runbook: SSL Certificate Renewal (t4a.etiam.si)
 
+## Cloudflare Credentials
+
+Two separate API token files are kept under `/data/certbot/credentials/`, one per Cloudflare account:
+
+| File | Account / zones covered |
+|------|--------------------------|
+| `cloudflare.ini` | etiam.si (and subdomains) |
+| `cloudflare-t4a.ini` | t4a domains |
+
+Both files must be `chmod 600`. Pass the correct one via `--dns-cloudflare-credentials` when running certbot manually:
+
+```bash
+# etiam.si
+certbot certonly --dns-cloudflare \
+  --dns-cloudflare-credentials /data/certbot/credentials/cloudflare.ini \
+  -d *.etiam.si
+
+# t4a domains
+certbot certonly --dns-cloudflare \
+  --dns-cloudflare-credentials /data/certbot/credentials/cloudflare-t4a.ini \
+  -d <t4a-domain>
+```
+
+Each certificate's renewal config (under `/data/certbot/config/renewal/`) must reference the correct credentials file via the `dns_cloudflare_credentials` key — certbot sets this automatically on first issue.
+
+---
+
 ## Symptoms
 
 - Browser shows "certificate expired" or "not secure" for any `*.t4a.etiam.si` domain
@@ -26,9 +53,10 @@
      --logs-dir /data/certbot/logs
    ```
 
-4. Check Cloudflare credentials are valid:
+4. Check Cloudflare credentials are valid (see [Cloudflare Credentials](#cloudflare-credentials) section above):
    ```bash
-   cat /data/certbot/credentials/cloudflare.ini
+   cat /data/certbot/credentials/cloudflare.ini        # etiam.si
+   cat /data/certbot/credentials/cloudflare-t4a.ini    # t4a domains
    ```
 
 ## Resolution
