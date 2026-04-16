@@ -6,15 +6,16 @@ Central "Source of Truth" for the T4A (Time 4 Action) ecosystem infrastructure. 
 
 ## Infrastructure overview
 
-The T4A ecosystem runs on the **T4A T2** cloud instance, hosting 13 Docker services:
+The T4A ecosystem runs on the **T4A T2** cloud instance (AlmaLinux 9, OpenStack), hosting Docker services and a bare-metal WordPress stack:
 
 - **Patrik** — Metakocka ERP integration (API, products automation, products UI)
 - **N8N** — Workflow automation engine (+ PostgreSQL)
 - **T4A Platform** — Admin dashboard, AI chat agent, export services, sync services
 - **T4A MCP** — AI-powered search server (FastAPI + ChromaDB + BM25)
 - **Certbot** — SSL certificate management (Let's Encrypt via Cloudflare DNS)
+- **WordPress** — Multi-site WordPress hosting (nginx + PHP 8.5 FPM + MariaDB)
 
-Deployment model: per-service Docker Compose stacks behind nginx reverse proxy.
+Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack, all behind nginx reverse proxy. WordPress sites live on a dedicated block volume at `/var/www/t4a/`.
 
 ## Directory layout
 

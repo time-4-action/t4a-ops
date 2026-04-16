@@ -4,7 +4,7 @@ Ops source of truth for the T4A ecosystem. Everything about what's running, wher
 
 ## T4A T2 Cloud Instance
 
-All services run as independent Docker Compose stacks behind an nginx reverse proxy with Let's Encrypt SSL (Cloudflare DNS).
+Docker services run as independent Compose stacks behind an nginx reverse proxy with Let's Encrypt SSL (Cloudflare DNS). The server also hosts a bare-metal WordPress stack (PHP 8.5 FPM + MariaDB) for multi-site WordPress hosting.
 
 ### Services
 
@@ -21,6 +21,9 @@ All services run as independent Docker Compose stacks behind an nginx reverse pr
 | t4a-mcp (+ chromadb) | 8000 | `mcp.time-4-action.com` |
 | t4a-sync | 3000 | — |
 | certbot | — | `t4a.etiam.si` |
+| wordpress (multi-site) | — | per-site domains |
+| php-fpm (Remi 8.5) | sock | — |
+| mariadb | 3306 | — |
 
 ### Server disk layout
 
@@ -36,6 +39,11 @@ All services run as independent Docker Compose stacks behind an nginx reverse pr
     ├── export/{api,ui}/              # export services
     ├── mcp/                          # MCP + ChromaDB
     └── sync/                         # t4a-sync
+
+/var/www/t4a/                         # Block volume (/dev/vdc)
+├── <site1.domain.com>/               # WordPress site 1
+├── <site2.domain.com>/               # WordPress site 2
+└── ...
 ```
 
 ### Cron jobs
