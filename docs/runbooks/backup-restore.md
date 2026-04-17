@@ -105,7 +105,7 @@ mariadb -e "SELECT CURRENT_USER();"
 ### 4. Initialize the restic repository
 
 ```bash
-export RESTIC_REPOSITORY="sftp:t4a-storagebox:/./restic/t4a-t2"
+export RESTIC_REPOSITORY="sftp:t4a-storagebox:restic/t4a-t2"
 export RESTIC_PASSWORD_FILE="/root/.restic-password"
 
 restic init
