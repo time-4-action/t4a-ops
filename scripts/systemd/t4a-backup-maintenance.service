@@ -1,0 +1,15 @@
+[Unit]
+Description=T4A weekly backup maintenance (restic prune + check)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=HOME=/root
+Nice=15
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/t4a-backup.sh maintenance
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=6h

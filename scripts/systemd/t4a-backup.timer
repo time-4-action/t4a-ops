@@ -1,0 +1,11 @@
+[Unit]
+Description=Run T4A backup nightly at ~03:00 local time
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=t4a-backup.service
+
+[Install]
+WantedBy=timers.target

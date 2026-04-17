@@ -1,0 +1,18 @@
+[Unit]
+Description=T4A nightly backup (restic -> Hetzner Storage Box)
+Documentation=file:/root/t4a-ops/docs/runbooks/backup-restore.md
+Wants=network-online.target
+After=network-online.target mariadb.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=HOME=/root
+Nice=10
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/t4a-backup.sh all
+StandardOutput=journal
+StandardError=journal
+
+# Give the backup room to breathe on slow nights but kill runaways.
+TimeoutStartSec=4h
