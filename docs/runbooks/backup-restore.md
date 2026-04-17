@@ -3,17 +3,21 @@
 > **Server:** t4a-t2 (AlmaLinux 9)
 > **Tool:** [restic](https://restic.net/) over SFTP
 > **Destination:** Hetzner Storage Box (SSH alias `t4a-storagebox`)
-> **Scope:** MariaDB (logical dumps), WordPress files (`/mnt/vdc/www/t4a`), server configs
+> **Scope:** MariaDB (logical dumps), WordPress files (`/mnt/vdc/www/t4a`), n8n (Postgres dump + `/data/n8n` files), server configs
 > **Schedule:** nightly backup at ~03:00, weekly prune + integrity check Sun ~04:00
 > **Retention:** 7 daily, 4 weekly, 6 monthly (per `host,tags` group)
+>
+> **Coverage map** (what IS and what ISN'T backed up): see [backup-coverage.md](./backup-coverage.md).
 
 ## What gets backed up
 
-| Tag         | Source                                       | How                                         |
-|-------------|----------------------------------------------|---------------------------------------------|
-| `mariadb`   | all databases                                | `mariadb-dump --single-transaction` via stdin |
-| `wordpress` | `/mnt/vdc/www/t4a`                           | filesystem (excludes WP caches + `*.log`)   |
-| `configs`   | `/etc/nginx`, `/etc/letsencrypt`, `/etc/my.cnf.d`, `/etc/fstab`, systemd units, docker-compose dirs (including `.env` files) | filesystem |
+| Tag            | Source                                       | How                                         |
+|----------------|----------------------------------------------|---------------------------------------------|
+| `mariadb`      | all databases                                | `mariadb-dump --single-transaction` via stdin |
+| `wordpress`    | `/mnt/vdc/www/t4a`                           | filesystem (excludes WP caches + `*.log`)   |
+| `n8n-postgres` | n8n PostgreSQL database                      | `docker exec n8n_postgres pg_dump --clean --if-exists` via stdin |
+| `n8n-files`    | `/data/n8n/n8n_data`, `/data/n8n/local-files` | filesystem (workflow defs, credentials, uploads) |
+| `configs`      | `/etc/nginx`, `/etc/letsencrypt`, `/etc/my.cnf.d`, `/etc/fstab`, systemd units, all docker-compose YAMLs + their `.env`/`.env.local` files under `/data/**/` | filesystem (explicit file list in `backup.env.example`) |
 
 ### Are `.env` files safe to back up?
 
@@ -116,30 +120,38 @@ If you see `repository master key and config already initialized` the repo alrea
 
 ### 5. Install the script, env file, and systemd units
 
-The reference copies live in this repo under `scripts/`. From your workstation:
+The t4a-ops repo is cloned on **t4a-t2** (typically at `/root/t4a-ops`). Run the
+following as root from the repo root — `install` sets mode + ownership in one
+call, so no separate `chmod`/`chown` needed and the commands are idempotent.
 
 ```bash
-# From the t4a-ops repo root, copy to the server:
-scp scripts/backup.sh               t4a-t2:/usr/local/bin/t4a-backup.sh
-scp scripts/backup.env.example      t4a-t2:/etc/t4a-backup.env
-scp scripts/systemd/t4a-backup*.{service,timer} t4a-t2:/etc/systemd/system/
-```
+cd /root/t4a-ops        # or wherever the repo is cloned
 
-On **t4a-t2**:
+# Script + systemd units — safe to re-run on every repo pull.
+install -m 0750 -o root -g root  scripts/backup.sh                              /usr/local/bin/t4a-backup.sh
+install -m 0644 -o root -g root  scripts/systemd/t4a-backup.service             /etc/systemd/system/
+install -m 0644 -o root -g root  scripts/systemd/t4a-backup.timer               /etc/systemd/system/
+install -m 0644 -o root -g root  scripts/systemd/t4a-backup-maintenance.service /etc/systemd/system/
+install -m 0644 -o root -g root  scripts/systemd/t4a-backup-maintenance.timer   /etc/systemd/system/
 
-```bash
-chmod 750 /usr/local/bin/t4a-backup.sh
-chown root:root /usr/local/bin/t4a-backup.sh
-
-chmod 600 /etc/t4a-backup.env
-chown root:root /etc/t4a-backup.env
-
-# Edit /etc/t4a-backup.env — in particular, uncomment and add your
-# docker-compose directories in BACKUP_PATHS_CONFIGS so .env files ride along.
-vi /etc/t4a-backup.env
+# Env file — ONLY on first install, so a re-deploy never clobbers local edits.
+# If backup.env.example grows new keys later, diff and merge by hand.
+[[ -f /etc/t4a-backup.env ]] || install -m 0600 -o root -g root scripts/backup.env.example /etc/t4a-backup.env
 
 systemctl daemon-reload
 ```
+
+Then edit `/etc/t4a-backup.env` — check every path in `BACKUP_PATHS_CONFIGS`
+exists on this host and comment out any that don't (e.g. certbot is left
+commented in the template until you confirm its exact layout). Also set
+`N8N_POSTGRES_CONTAINER` if the container name differs from `n8n_postgres`.
+
+```bash
+vi /etc/t4a-backup.env
+```
+
+For a full map of what each tag captures — and what is **not** backed up —
+see [backup-coverage.md](./backup-coverage.md).
 
 ### 6. First backup (manual, one tag at a time so failures are obvious)
 
@@ -147,12 +159,14 @@ systemctl daemon-reload
 /usr/local/bin/t4a-backup.sh configs     # smallest, test paths first
 /usr/local/bin/t4a-backup.sh mariadb
 /usr/local/bin/t4a-backup.sh wordpress
+/usr/local/bin/t4a-backup.sh n8n         # requires the n8n_postgres container to be up
 
 # Confirm snapshots exist
 restic -r "$RESTIC_REPOSITORY" -p /root/.restic-password snapshots
 ```
 
-You should see three snapshots, one per tag, with host `t4a-t2`.
+You should see snapshots for each tag (`configs`, `mariadb`, `wordpress`,
+`n8n-postgres`, `n8n-files`), all with host `t4a-t2`.
 
 ### 7. Enable the timers
 
@@ -244,6 +258,38 @@ mysql -u root -p -e "DROP DATABASE restore_test;"
 mysql -u root -p < /tmp/restore/all-databases.sql
 ```
 
+### Restore n8n (PostgreSQL + files)
+
+n8n needs BOTH the `n8n-postgres` dump AND the `n8n-files` tree — the database
+holds workflows/executions, but `n8n_data` holds the encryption key and config
+that make the dumped credentials decryptable.
+
+```bash
+# 1. Stop n8n (keep postgres up — we need it for psql).
+cd /data/n8n && docker compose stop n8n
+
+# 2. Restore files (workflow definitions, N8N_ENCRYPTION_KEY, local uploads).
+mkdir -p /tmp/restore
+restic restore latest --tag n8n-files --target /tmp/restore
+# Inspect /tmp/restore/data/n8n, then rsync into place:
+rsync -a --delete /tmp/restore/data/n8n/n8n_data/    /data/n8n/n8n_data/
+rsync -a --delete /tmp/restore/data/n8n/local-files/ /data/n8n/local-files/
+
+# 3. Restore the Postgres dump into the running container.
+restic restore latest --tag n8n-postgres --target /tmp/restore
+docker exec -i n8n_postgres \
+  sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < /tmp/restore/n8n.sql
+
+# 4. Start n8n and verify.
+docker compose up -d n8n
+docker logs -f n8n
+```
+
+If workflow credentials show as "unable to decrypt", the `N8N_ENCRYPTION_KEY`
+in `/data/n8n/.env` no longer matches the one used when the dump was taken.
+Restore `/data/n8n/n8n_data/config` from the same snapshot as the SQL dump.
+
 ### Browse a snapshot interactively (FUSE mount)
 
 Useful when you're hunting for the right version of a file across snapshots.
@@ -264,7 +310,9 @@ fusermount -u /mnt/restic    # when done
 4. Install MariaDB per the [MariaDB Maintenance runbook](./mariadb-maintenance.md), then `restic restore latest --tag mariadb --target /tmp/restore && mysql < /tmp/restore/all-databases.sql`.
 5. `restic restore latest --tag wordpress --target /`.
 6. `systemctl daemon-reload && systemctl enable --now mariadb nginx docker t4a-backup.timer t4a-backup-maintenance.timer`.
-7. Bring docker stacks up (`docker compose up -d` in each `/opt/docker/*` directory).
+7. Restore n8n filesystem state: `restic restore latest --tag n8n-files --target /`.
+8. Bring docker stacks up (`docker compose up -d` in each stack directory: `/data/patrik/`, `/data/n8n/`, `/data/stack/apps/time-4-action/{admin,chat,export,mcp,sync}/`, `/data/certbot/`). Postgres will come up with an empty DB.
+9. Replay the n8n Postgres dump into the fresh container — see the "Restore n8n" section above.
 
 ## Monitoring
 
