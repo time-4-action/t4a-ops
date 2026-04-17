@@ -3,10 +3,10 @@
 # T4A backup — restic -> Hetzner Storage Box (SFTP).
 #
 # Usage:
-#   backup.sh [all|mariadb|wordpress|configs|maintenance]
+#   backup.sh [all|mariadb|wordpress|n8n|configs|maintenance]
 #
 # Config file: /etc/t4a-backup.env (see backup.env.example)
-# Runs as root. Depends on restic, mariadb-dump, and ~/.ssh/config alias.
+# Runs as root. Depends on restic, mariadb-dump, docker, and ~/.ssh/config alias.
 
 set -euo pipefail
 
@@ -56,6 +56,26 @@ backup_configs() {
     "${BACKUP_PATHS_CONFIGS[@]}"
 }
 
+backup_n8n() {
+  log "dump n8n PostgreSQL -> restic (tag=n8n-postgres)"
+  # pg_dump runs inside the container so we do not need a postgres client
+  # on the host. PGPASSWORD + -U come from the container's own env, which
+  # the compose file populates from /data/n8n/.env.
+  # --clean --if-exists makes the dump idempotent on restore.
+  docker exec "$N8N_POSTGRES_CONTAINER" \
+    sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump --clean --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB"' \
+  | restic backup --stdin \
+      --stdin-filename "n8n.sql" \
+      --tag n8n-postgres \
+      --host "$BACKUP_HOST"
+
+  log "backup n8n files -> restic (tag=n8n-files)"
+  restic backup \
+    --tag n8n-files \
+    --host "$BACKUP_HOST" \
+    "${BACKUP_PATHS_N8N[@]}"
+}
+
 forget_old() {
   log "forget old snapshots per retention policy"
   restic forget \
@@ -77,14 +97,16 @@ main() {
     mariadb)     backup_mariadb ;;
     wordpress)   backup_wordpress ;;
     configs)     backup_configs ;;
+    n8n)         backup_n8n ;;
     all)
       backup_mariadb
       backup_wordpress
+      backup_n8n
       backup_configs
       forget_old
       ;;
     maintenance) maintenance ;;
-    *) echo "usage: $0 [all|mariadb|wordpress|configs|maintenance]" >&2; exit 2 ;;
+    *) echo "usage: $0 [all|mariadb|wordpress|n8n|configs|maintenance]" >&2; exit 2 ;;
   esac
   log "done ($target)"
 }
