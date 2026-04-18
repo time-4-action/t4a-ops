@@ -16,9 +16,10 @@ Green = safe. Yellow = partially covered or reconstructible with effort. Red = t
 | Area | State |
 |---|---|
 | WordPress sites (files + MariaDB) | 🟢 covered |
-| System configs (nginx, letsencrypt, fstab, systemd, my.cnf.d) | 🟢 covered |
+| System configs (nginx, letsencrypt, fstab, systemd, my.cnf.d, mongod.conf) | 🟢 covered |
 | Docker compose files + their `.env` secrets | 🟢 covered |
 | n8n (Postgres dump + `n8n_data` + `local-files`) | 🟢 covered |
+| MongoDB (`/data/mongo`) | 🟢 covered |
 | Patrik SQLite DB (`/data/patrik/`) | 🔴 NOT covered |
 | T4A sync SQLite DB (`/data/stack/apps/time-4-action/sync/`) | 🔴 NOT covered |
 | ChromaDB vector store (`/data/stack/apps/time-4-action/mcp/chroma_db/`) | 🟡 reconstructible (reindex) |
@@ -36,7 +37,8 @@ The nightly `t4a-backup.sh all` run creates one snapshot per tag below. `n8n` is
 | `wordpress` | `/mnt/vdc/www/t4a/` | restic filesystem backup, excludes WP caches + `*.log` |
 | `n8n-postgres` | n8n Postgres database inside `n8n_postgres` container | `docker exec … pg_dump --clean --if-exists` → stdin → restic |
 | `n8n-files` | `/data/n8n/n8n_data/` + `/data/n8n/local-files/` | restic filesystem backup |
-| `configs` | system `/etc/*` + all docker-compose `.yaml` + `.env` files | restic filesystem backup (explicit file list — see `backup.env.example`) |
+| `mongodb` | all MongoDB databases (`/data/mongo`) | `mongodump --uri=$MONGO_URI --archive` → stdin → restic |
+| `configs` | system `/etc/*` (incl. `mongod.conf`) + all docker-compose `.yaml` + `.env` files | restic filesystem backup (explicit file list — see `backup.env.example`) |
 
 Full path list for `configs` is in [`scripts/backup.env.example`](../../scripts/backup.env.example) → `BACKUP_PATHS_CONFIGS`. Changes to that file must be deployed to `/etc/t4a-backup.env` on the server.
 
@@ -45,6 +47,7 @@ Full path list for `configs` is in [`scripts/backup.env.example`](../../scripts/
 | Service | Data path on server | Backed up by | Recover from | Notes |
 |---|---|---|---|---|
 | **MariaDB** | `/mnt/vdc/mysql/` | `mariadb` tag | logical dump replay | Bare-metal install. Dump is `all-databases.sql`. |
+| **MongoDB** | `/data/mongo` | `mongodb` tag | `mongorestore --archive` | Bare-metal install. Auth enabled. Dump via `mongodump --archive` piped to restic stdin. Restore: see [backup-restore.md](./backup-restore.md). |
 | **WordPress (all sites)** | `/mnt/vdc/www/t4a/` | `wordpress` tag | rsync from restore | WP caches + `*.log` excluded. |
 | **nginx config** | `/etc/nginx` | `configs` tag | restore to `/` | |
 | **Let's Encrypt certs** | `/etc/letsencrypt` | `configs` tag | restore to `/` | Renewal also needs certbot compose + Cloudflare API secrets (in certbot `.env`, currently commented out — see "Known gaps"). |
@@ -124,6 +127,7 @@ Assumes `RESTIC_REPOSITORY` + `RESTIC_PASSWORD_FILE` are exported (or source `/e
 | Single WordPress file | `wordpress` | Restore a single WordPress file |
 | Whole WordPress tree | `wordpress` | Restore the whole WordPress tree |
 | MariaDB dump | `mariadb` | Restore a MariaDB dump |
+| MongoDB dump | `mongodb` | Restore a MongoDB dump |
 | n8n workflows + Postgres | `n8n-files` + `n8n-postgres` | Restore n8n (PostgreSQL + files) |
 | nginx config rollback | `configs` | (restore single path with `--include`) |
 | SSL certs | `configs` | (restore `/etc/letsencrypt/`) |
@@ -151,4 +155,5 @@ All `Time` columns in the snapshots output should be < 30h old. If a tag is miss
 
 ## Changelog
 
+- **2026-04-18** — Added MongoDB backup: `mongodump --archive` → restic `mongodb` tag. `/etc/mongod.conf` added to `configs` tag. Service registered in inventory.
 - **2026-04-17** — Initial coverage map. Added n8n (Postgres dump + files), replaced `/opt/docker/*` placeholder paths in `configs` tag with real `/data/*` compose + env paths. Gaps documented: Patrik/sync SQLite, patrik-products catalog, ChromaDB/BM25/uploads, export API data, certbot compose.

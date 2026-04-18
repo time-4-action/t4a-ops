@@ -3,7 +3,7 @@
 > **Server:** t4a-t2 (AlmaLinux 9)
 > **Tool:** [restic](https://restic.net/) over SFTP
 > **Destination:** Hetzner Storage Box (SSH alias `t4a-storagebox`)
-> **Scope:** MariaDB (logical dumps), WordPress files (`/mnt/vdc/www/t4a`), n8n (Postgres dump + `/data/n8n` files), server configs
+> **Scope:** MariaDB (logical dumps), WordPress files (`/mnt/vdc/www/t4a`), n8n (Postgres dump + `/data/n8n` files), MongoDB (logical dump), server configs
 > **Schedule:** nightly backup at ~03:00, weekly prune + integrity check Sun ~04:00
 > **Retention:** 7 daily, 4 weekly, 6 monthly (per `host,tags` group)
 >
@@ -17,7 +17,8 @@
 | `wordpress`    | `/mnt/vdc/www/t4a`                           | filesystem (excludes WP caches + `*.log`)   |
 | `n8n-postgres` | n8n PostgreSQL database                      | `docker exec n8n_postgres pg_dump --clean --if-exists` via stdin |
 | `n8n-files`    | `/data/n8n/n8n_data`, `/data/n8n/local-files` | filesystem (workflow defs, credentials, uploads) |
-| `configs`      | `/etc/nginx`, `/etc/letsencrypt`, `/etc/my.cnf.d`, `/etc/fstab`, systemd units, all docker-compose YAMLs + their `.env`/`.env.local` files under `/data/**/` | filesystem (explicit file list in `backup.env.example`) |
+| `mongodb`      | all MongoDB databases (`/data/mongo`)        | `mongodump --uri=$MONGO_URI --archive` via stdin        |
+| `configs`      | `/etc/nginx`, `/etc/letsencrypt`, `/etc/my.cnf.d`, `/etc/mongod.conf`, `/etc/fstab`, systemd units, all docker-compose YAMLs + their `.env`/`.env.local` files under `/data/**/` | filesystem (explicit file list in `backup.env.example`) |
 
 ### Are `.env` files safe to back up?
 
@@ -106,7 +107,38 @@ mariadb -e "SELECT CURRENT_USER();"
 # Expected: backup@localhost
 ```
 
-### 4. Initialize the restic repository
+### 4. Create a dedicated MongoDB backup user
+
+MongoDB auth is enabled, so `mongodump` needs credentials. Use the built-in `backup` role (read-only across all databases).
+
+```bash
+mongosh -u <admin_user> -p --authenticationDatabase admin
+```
+
+Inside the shell:
+
+```js
+use admin
+db.createUser({
+  user: "backup",
+  pwd: "STRONG_PASSWORD",
+  roles: ["backup"]
+})
+exit
+```
+
+Add to `/etc/t4a-backup.env`:
+
+```bash
+echo 'MONGO_URI="mongodb://backup:STRONG_PASSWORD@localhost:27017/?authSource=admin"' \
+  >> /etc/t4a-backup.env
+
+# Smoke test
+mongodump --uri="mongodb://backup:STRONG_PASSWORD@localhost:27017/?authSource=admin" \
+  --archive --dryRun 2>&1 | head -5
+```
+
+### 4a. Initialize the restic repository
 
 ```bash
 export RESTIC_REPOSITORY="sftp:t4a-storagebox:restic/t4a-t2"
@@ -160,13 +192,14 @@ see [backup-coverage.md](./backup-coverage.md).
 /usr/local/bin/t4a-backup.sh mariadb
 /usr/local/bin/t4a-backup.sh wordpress
 /usr/local/bin/t4a-backup.sh n8n         # requires the n8n_postgres container to be up
+/usr/local/bin/t4a-backup.sh mongodb     # requires mongod to be up and MONGO_URI set
 
 # Confirm snapshots exist
 restic -r "$RESTIC_REPOSITORY" -p /root/.restic-password snapshots
 ```
 
 You should see snapshots for each tag (`configs`, `mariadb`, `wordpress`,
-`n8n-postgres`, `n8n-files`), all with host `t4a-t2`.
+`n8n-postgres`, `n8n-files`, `mongodb`), all with host `t4a-t2`.
 
 ### 7. Enable the timers
 
@@ -290,6 +323,38 @@ If workflow credentials show as "unable to decrypt", the `N8N_ENCRYPTION_KEY`
 in `/data/n8n/.env` no longer matches the one used when the dump was taken.
 Restore `/data/n8n/n8n_data/config` from the same snapshot as the SQL dump.
 
+### Restore a MongoDB dump
+
+```bash
+mkdir -p /tmp/restore
+restic restore latest --tag mongodb --target /tmp/restore
+ls -lh /tmp/restore/mongodb.archive
+
+# Stop traffic to MongoDB-dependent services first (if any are running)
+
+# Restore all databases from the archive.
+# --drop: drop existing collections before restoring (safe for full recovery).
+# --nsInclude='*.*': restore all namespaces (default; explicit for clarity).
+mongorestore \
+  --uri="mongodb://admin_user:ADMIN_PASS@localhost:27017/?authSource=admin" \
+  --archive=/tmp/restore/mongodb.archive \
+  --drop
+
+# Verify
+mongosh -u admin_user -p --authenticationDatabase admin \
+  --eval "db.adminCommand({ listDatabases: 1 })"
+```
+
+To restore a single database only (e.g. `mydb`):
+
+```bash
+mongorestore \
+  --uri="mongodb://admin_user:ADMIN_PASS@localhost:27017/?authSource=admin" \
+  --archive=/tmp/restore/mongodb.archive \
+  --nsInclude='mydb.*' \
+  --drop
+```
+
 ### Browse a snapshot interactively (FUSE mount)
 
 Useful when you're hunting for the right version of a file across snapshots.
@@ -364,6 +429,26 @@ SSH to the Storage Box is broken. Run `ssh t4a-storagebox ls` as root and fix th
 ### `Fatal: wrong password or no key found`
 
 `/root/.restic-password` does not match the repo master key. Restore it from your password manager — the repo cannot be re-keyed without the existing password.
+
+### `config error: MONGO_URI is not set`
+
+`MONGO_URI` was added to `backup.env.example` after your initial deploy. Since the install step never overwrites an existing env file, merge it by hand:
+
+```bash
+diff <(grep -E '^[A-Z_]+=|^[A-Z_]+\(' /root/t4a-ops/scripts/backup.env.example) \
+     <(grep -E '^[A-Z_]+=|^[A-Z_]+\(' /etc/t4a-backup.env)
+# Add missing MONGO_URI line to /etc/t4a-backup.env, then re-run.
+```
+
+### `mongodump: Failed: (Unauthorized)`
+
+The MongoDB backup user doesn't have the `backup` role or the `authSource` in `MONGO_URI` is wrong. Verify:
+
+```bash
+mongosh -u backup -p --authenticationDatabase admin --eval "db.runCommand({connectionStatus:1})"
+```
+
+If it fails, re-create the user (step 4 of one-time setup). Ensure `MONGO_URI` ends with `?authSource=admin`.
 
 ### `mariadb-dump: Got error: 1045: Access denied`
 

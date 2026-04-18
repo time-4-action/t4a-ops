@@ -3,7 +3,7 @@
 # T4A backup — restic -> Hetzner Storage Box (SFTP).
 #
 # Usage:
-#   backup.sh [all|mariadb|wordpress|n8n|configs|maintenance]
+#   backup.sh [all|mariadb|wordpress|n8n|mongodb|configs|maintenance]
 #
 # Config file: /etc/t4a-backup.env (see backup.env.example)
 # Runs as root. Depends on restic, mariadb-dump, docker, and ~/.ssh/config alias.
@@ -21,7 +21,7 @@ log() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
 
 validate_config() {
   local ok=1
-  local required_vars=(RESTIC_REPOSITORY RESTIC_PASSWORD_FILE BACKUP_HOST N8N_POSTGRES_CONTAINER)
+  local required_vars=(RESTIC_REPOSITORY RESTIC_PASSWORD_FILE BACKUP_HOST N8N_POSTGRES_CONTAINER MONGO_URI)
   local required_arrays=(BACKUP_PATHS_WORDPRESS BACKUP_PATHS_N8N BACKUP_PATHS_CONFIGS)
 
   for var in "${required_vars[@]}"; do
@@ -101,6 +101,17 @@ backup_n8n() {
     "${BACKUP_PATHS_N8N[@]}"
 }
 
+backup_mongodb() {
+  log "dump MongoDB -> restic (tag=mongodb)"
+  # mongodump --archive streams a binary archive; pipe directly into restic.
+  # MONGO_URI must include credentials: mongodb://user:pass@localhost:27017
+  mongodump --uri="$MONGO_URI" --archive \
+  | restic backup --stdin \
+      --stdin-filename "mongodb.archive" \
+      --tag mongodb \
+      --host "$BACKUP_HOST"
+}
+
 forget_old() {
   log "forget old snapshots per retention policy"
   restic forget \
@@ -124,15 +135,17 @@ main() {
     wordpress)   backup_wordpress ;;
     configs)     backup_configs ;;
     n8n)         backup_n8n ;;
+    mongodb)     backup_mongodb ;;
     all)
       backup_mariadb
       backup_wordpress
       backup_n8n
+      backup_mongodb
       backup_configs
       forget_old
       ;;
     maintenance) maintenance ;;
-    *) echo "usage: $0 [all|mariadb|wordpress|n8n|configs|maintenance]" >&2; exit 2 ;;
+    *) echo "usage: $0 [all|mariadb|wordpress|n8n|mongodb|configs|maintenance]" >&2; exit 2 ;;
   esac
   log "done ($target)"
 }
