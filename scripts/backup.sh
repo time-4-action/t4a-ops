@@ -19,6 +19,31 @@ export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE
 
 log() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
 
+validate_config() {
+  local ok=1
+  local required_vars=(RESTIC_REPOSITORY RESTIC_PASSWORD_FILE BACKUP_HOST N8N_POSTGRES_CONTAINER)
+  local required_arrays=(BACKUP_PATHS_WORDPRESS BACKUP_PATHS_N8N BACKUP_PATHS_CONFIGS)
+
+  for var in "${required_vars[@]}"; do
+    if [[ -z "${!var:-}" ]]; then
+      echo "config error: $var is not set in $CONFIG" >&2
+      ok=0
+    fi
+  done
+
+  for arr in "${required_arrays[@]}"; do
+    # nameref trick to check array length without eval
+    declare -n _arr="$arr" 2>/dev/null
+    if [[ ${#_arr[@]} -eq 0 ]]; then
+      echo "config error: $arr is empty or not set in $CONFIG" >&2
+      ok=0
+    fi
+    unset -n _arr
+  done
+
+  [[ $ok -eq 1 ]] || { echo "fix $CONFIG and re-run" >&2; exit 1; }
+}
+
 backup_mariadb() {
   log "dump MariaDB -> restic (tag=mariadb)"
   # --single-transaction: consistent snapshot on InnoDB without table locks.
@@ -92,6 +117,7 @@ maintenance() {
 }
 
 main() {
+  validate_config
   local target="${1:-all}"
   case "$target" in
     mariadb)     backup_mariadb ;;

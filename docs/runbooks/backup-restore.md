@@ -346,6 +346,17 @@ Silent failures (backup never runs) are more dangerous than loud ones. Two simpl
 
 ## Troubleshooting
 
+### `config error: N8N_POSTGRES_CONTAINER is not set` / `Fatal: nothing to backup`
+
+`/etc/t4a-backup.env` is missing variables that were added to `backup.env.example` after initial deploy. The install step (step 5) never overwrites an existing env file, so new keys must be merged by hand.
+
+```bash
+diff <(grep -E '^[A-Z_]+=|^[A-Z_]+\(' /root/t4a-ops/scripts/backup.env.example) \
+     <(grep -E '^[A-Z_]+=|^[A-Z_]+\(' /etc/t4a-backup.env)
+# Copy any missing keys from the example into /etc/t4a-backup.env, then:
+sudo /usr/local/bin/t4a-backup.sh all
+```
+
 ### `Fatal: unable to open config file: ssh: ... connection refused`
 
 SSH to the Storage Box is broken. Run `ssh t4a-storagebox ls` as root and fix the transport layer before investigating restic.
