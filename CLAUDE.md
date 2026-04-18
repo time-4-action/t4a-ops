@@ -39,6 +39,7 @@ Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack
 - `/add-runbook` — Create a runbook from template
 - `/add-adr` — Create a numbered Architecture Decision Record
 - `/audit` — Check inventory cross-references, completeness, and freshness
+- `/add-ops` — Analyze pasted content (configs, logs, incidents, compose files, etc.) and apply the right updates to this repo
 
 ## Key conventions
 
