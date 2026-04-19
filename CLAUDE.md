@@ -12,7 +12,7 @@ The T4A ecosystem runs on the **T4A T2** cloud instance (AlmaLinux 9, OpenStack)
 - **N8N** — Workflow automation engine (+ PostgreSQL)
 - **T4A Platform** — Admin dashboard, AI chat agent, export services, sync services
 - **T4A MCP** — AI-powered search server (FastAPI + ChromaDB + BM25)
-- **Certbot** — SSL certificate management (Let's Encrypt via Cloudflare DNS)
+- **SSL** — Cloudflare Origin Certificates (stored in `/etc/cloudflare-origin/`, see `docs/runbooks/ssl-certificate-renewal.md`)
 - **WordPress** — Multi-site WordPress hosting (nginx + PHP 8.5 FPM + MariaDB 10.5.29)
 
 Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack, all behind nginx reverse proxy. Block volume `/dev/vdc` mounted at `/mnt/vdc` — shared between MariaDB data and WordPress sites (`/mnt/vdc/www/t4a/`).
@@ -40,6 +40,12 @@ Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack
 - `/add-adr` — Create a numbered Architecture Decision Record
 - `/audit` — Check inventory cross-references, completeness, and freshness
 - `/add-ops` — Analyze pasted content (configs, logs, incidents, compose files, etc.) and apply the right updates to this repo
+
+## Git workflow
+
+- **`main` is protected** — no direct pushes, no force pushes, no deletions.
+- All changes go through a **feature branch + pull request**. Branch naming: `ops/<topic>`.
+- After a PR is merged: `git checkout main && git pull && git branch -d <branch>`.
 
 ## Key conventions
 
