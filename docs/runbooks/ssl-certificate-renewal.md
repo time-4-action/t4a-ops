@@ -1,90 +1,89 @@
-# Runbook: SSL Certificate Renewal (t4a.etiam.si)
+# Runbook: SSL / TLS Certificate Management
 
-## Cloudflare Credentials
+## Strategy: Cloudflare Origin Certificates
 
-Two separate API token files are kept under `/data/certbot/credentials/`, one per Cloudflare account:
+All domains are proxied through Cloudflare (orange cloud). TLS is terminated at Cloudflare for browsers. Between Cloudflare → origin server we use **Cloudflare Origin Certificates** — free, 15-year validity, zero renewal automation needed.
 
-| File | Account / zones covered |
-|------|--------------------------|
-| `cloudflare.ini` | etiam.si (and subdomains) |
-| `cloudflare-t4a.ini` | t4a domains |
+Cloudflare SSL/TLS mode must be set to **Full (strict)**.
 
-Both files must be `chmod 600`. Pass the correct one via `--dns-cloudflare-credentials` when running certbot manually:
-
-```bash
-# etiam.si
-certbot certonly --dns-cloudflare \
-  --dns-cloudflare-credentials /data/certbot/credentials/cloudflare.ini \
-  -d *.etiam.si
-
-# t4a domains
-certbot certonly --dns-cloudflare \
-  --dns-cloudflare-credentials /data/certbot/credentials/cloudflare-t4a.ini \
-  -d <t4a-domain>
-```
-
-Each certificate's renewal config (under `/data/certbot/config/renewal/`) must reference the correct credentials file via the `dns_cloudflare_credentials` key — certbot sets this automatically on first issue.
+> Origin Certificates are only trusted by Cloudflare. If you ever disable the Cloudflare proxy (grey cloud) for a domain, browsers will reject the cert. That is expected — don't do it in production.
 
 ---
 
-## Symptoms
+## Certificate storage on server
 
-- Browser shows "certificate expired" or "not secure" for any `*.t4a.etiam.si` domain
-- nginx returns TLS handshake errors
-- Certbot renewal logs show failures in `/data/certbot/logs/renew.log`
+```
+/etc/cloudflare-origin/
+  <project-name>/
+    origin.crt   # chmod 644
+    origin.key   # chmod 600
+```
+
+Permissions:
+```bash
+chmod 755 /etc/cloudflare-origin/
+chmod 755 /etc/cloudflare-origin/<project-name>/
+chmod 644 /etc/cloudflare-origin/<project-name>/origin.crt
+chmod 600 /etc/cloudflare-origin/<project-name>/origin.key
+```
+
+Backed up via `BACKUP_PATHS_CONFIGS` in `/etc/t4a-backup.env` (see `scripts/backup.env.example`).
+
+---
+
+## Issuing a new Origin Certificate
+
+1. Cloudflare dashboard → select domain → **SSL/TLS → Origin Server → Create Certificate**
+2. Choose **RSA**, add `yourdomain.com` and `*.yourdomain.com`, set validity to **15 years**
+3. Copy the certificate and private key to the server:
+   ```bash
+   mkdir -p /etc/cloudflare-origin/<project-name>
+   vi /etc/cloudflare-origin/<project-name>/origin.crt   # paste cert
+   vi /etc/cloudflare-origin/<project-name>/origin.key   # paste key
+   chmod 644 /etc/cloudflare-origin/<project-name>/origin.crt
+   chmod 600 /etc/cloudflare-origin/<project-name>/origin.key
+   ```
+4. Point nginx at the new cert (see nginx config below)
+5. Reload nginx: `systemctl reload nginx`
+
+## nginx config snippet
+
+```nginx
+ssl_certificate     /etc/cloudflare-origin/<project-name>/origin.crt;
+ssl_certificate_key /etc/cloudflare-origin/<project-name>/origin.key;
+```
+
+---
+
+## Deployed certificates
+
+| Project dir | Domains covered | Issued |
+|---|---|---|
+| `the-chase-project` | the-chase-project domains | 2026-04-19 |
+
+---
 
 ## Diagnosis
 
-1. Check cert expiry date:
-   ```bash
-   openssl x509 -enddate -noout -in /data/certbot/config/live/t4a.etiam.si/cert.pem
-   ```
+Check cert expiry (should be ~15 years out):
+```bash
+openssl x509 -enddate -noout -in /etc/cloudflare-origin/<project-name>/origin.crt
+```
 
-2. Check certbot renewal status:
-   ```bash
-   certbot certificates --config-dir /data/certbot/config --work-dir /data/certbot/work --logs-dir /data/certbot/logs
-   ```
+Verify nginx is serving it:
+```bash
+echo | openssl s_client -connect yourdomain.com:443 -servername yourdomain.com 2>/dev/null | openssl x509 -noout -dates
+```
 
-3. Test a dry-run renewal:
-   ```bash
-   certbot renew --dry-run \
-     --config-dir /data/certbot/config \
-     --work-dir /data/certbot/work \
-     --logs-dir /data/certbot/logs
-   ```
+Test nginx config before reload:
+```bash
+nginx -t
+```
 
-4. Check Cloudflare credentials are valid (see [Cloudflare Credentials](#cloudflare-credentials) section above):
-   ```bash
-   cat /data/certbot/credentials/cloudflare.ini        # etiam.si
-   cat /data/certbot/credentials/cloudflare-t4a.ini    # t4a domains
-   ```
-
-## Resolution
-
-1. Force renewal:
-   ```bash
-   certbot renew --force-renewal \
-     --config-dir /data/certbot/config \
-     --work-dir /data/certbot/work \
-     --logs-dir /data/certbot/logs
-   ```
-
-2. Reload nginx to pick up new cert:
-   ```bash
-   systemctl reload nginx
-   ```
-
-3. If Cloudflare API token expired, generate a new one in Cloudflare dashboard and update `/data/certbot/credentials/cloudflare.ini`.
-
-## Monitoring
-
-- Verify cert is renewed:
-  ```bash
-  echo | openssl s_client -connect t4a.etiam.si:443 -servername t4a.etiam.si 2>/dev/null | openssl x509 -noout -dates
-  ```
-- Check renewal log: `/data/certbot/logs/renew.log`
+---
 
 ## Escalation
 
-- Cloudflare DNS issues: check Cloudflare dashboard
-- Certbot bugs: check `/data/certbot/logs/letsencrypt.log`
+- Wrong SSL mode in Cloudflare → browser SSL errors even if cert is valid — check **SSL/TLS → Overview**, must be **Full (strict)**
+- Cert not found → check path in nginx conf matches `/etc/cloudflare-origin/<project>/origin.crt`
+- Cloudflare dashboard → SSL/TLS → Origin Server to view/revoke issued certs
