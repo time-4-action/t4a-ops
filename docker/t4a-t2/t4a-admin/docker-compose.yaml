@@ -2,17 +2,14 @@
 # Server path: /data/stack/apps/time-4-action/admin/
 # Port: 3005
 # Domain: admin.time-4-action.com
+#
+# Deployed by GitHub Actions from time-4-action/t4a-admin (docs/deployment.md):
+# CI exports APP_IMAGE=time4action/t4a-admin:<commit sha>; without it this runs
+# :latest. The server never builds. Mirrors t4a-admin's deploy/docker-compose.yaml.
 
 services:
   t4a-admin:
-    image: etiamsi/t4a-admin:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_APP_NAME
-        - NEXT_PUBLIC_AI_ROLE_NAME
-        - NEXT_PUBLIC_EUR_USD_RATE
+    image: ${APP_IMAGE:-time4action/t4a-admin:latest}
     ports:
       - "3005:3005"
     env_file:
