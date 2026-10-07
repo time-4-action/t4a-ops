@@ -4,12 +4,12 @@
 # Domain: admin.time-4-action.com
 #
 # Deployed by GitHub Actions from time-4-action/t4a-admin (docs/deployment.md):
-# CI exports APP_IMAGE=time4action/t4a-admin:<commit sha>; without it this runs
+# CI exports APP_IMAGE=ghcr.io/time-4-action/t4a-admin:<commit sha>; without it this runs
 # :latest. The server never builds. Mirrors t4a-admin's deploy/docker-compose.yaml.
 
 services:
   t4a-admin:
-    image: ${APP_IMAGE:-time4action/t4a-admin:latest}
+    image: ${APP_IMAGE:-ghcr.io/time-4-action/t4a-admin:latest}
     ports:
       - "3005:3005"
     env_file:
