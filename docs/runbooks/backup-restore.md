@@ -152,25 +152,15 @@ If you see `repository master key and config already initialized` the repo alrea
 
 ### 5. Install the script, env file, and systemd units
 
-The t4a-ops repo is cloned on **t4a-t2** (typically at `/root/t4a-ops`). Run the
-following as root from the repo root — `install` sets mode + ownership in one
-call, so no separate `chmod`/`chown` needed and the commands are idempotent.
+The script and systemd units are installed by CI on every push to `main`
+([t4a-ops CI/CD](./ops-deploy.md)); after a merge they are already in place.
+CI never creates or edits the env file. Create it once, as root, from a checkout
+of this repo:
 
 ```bash
-cd /root/t4a-ops        # or wherever the repo is cloned
-
-# Script + systemd units — safe to re-run on every repo pull.
-install -m 0750 -o root -g root  scripts/backup.sh                              /usr/local/bin/t4a-backup.sh
-install -m 0644 -o root -g root  scripts/systemd/t4a-backup.service             /etc/systemd/system/
-install -m 0644 -o root -g root  scripts/systemd/t4a-backup.timer               /etc/systemd/system/
-install -m 0644 -o root -g root  scripts/systemd/t4a-backup-maintenance.service /etc/systemd/system/
-install -m 0644 -o root -g root  scripts/systemd/t4a-backup-maintenance.timer   /etc/systemd/system/
-
-# Env file — ONLY on first install, so a re-deploy never clobbers local edits.
+# Env file — ONLY on first install, so nothing clobbers local edits.
 # If backup.env.example grows new keys later, diff and merge by hand.
 [[ -f /etc/t4a-backup.env ]] || install -m 0600 -o root -g root scripts/backup.env.example /etc/t4a-backup.env
-
-systemctl daemon-reload
 ```
 
 Then edit `/etc/t4a-backup.env` — check every path in `BACKUP_PATHS_CONFIGS`

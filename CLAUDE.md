@@ -29,6 +29,7 @@ Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack
 - `scripts/` — Automation and maintenance scripts (must be idempotent)
 - `docs/adr/` — Architecture Decision Records
 - `docs/runbooks/` — Step-by-step incident/fix guides
+- `.github/workflows/ci.yml` — CI/CD: checks every PR, deploys `scripts/` to T4A T2 on `main` (see `docs/runbooks/ops-deploy.md`)
 - `.claude/skills/` — Custom Claude Code skills for this repo
 
 ## Available skills
@@ -45,6 +46,7 @@ Deployment model: per-service Docker Compose stacks + bare-metal WordPress stack
 
 - **`main` is protected** — no direct pushes, no force pushes, no deletions.
 - All changes go through a **feature branch + pull request**. Branch naming: `ops/<topic>`.
+- The `ci` workflow's `check` must pass. Merging to `main` deploys `scripts/` to the server, so never hand-edit the installed copies there.
 - After a PR is merged: `git checkout main && git pull && git branch -d <branch>`.
 
 ## Key conventions
