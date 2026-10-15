@@ -1,0 +1,121 @@
+# check -> deploy.
+#
+# Checks every pull request and every push to main. This repo builds no image:
+# what runs on t4a-t2 is the backup script and its systemd units under
+# scripts/. On main, a green check streams those files to the server over SSH,
+# where scripts/deploy/t4a-ops-deploy.sh installs them, verifies the result
+# and puts the previous files back if it does not verify. The reference
+# compose files under docker/ are documentation and are only checked, never
+# deployed. See docs/runbooks/ops-deploy.md.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same pull request supersedes the running check. On main
+# runs are never cancelled, only queued, so an older commit can never be
+# deployed over a newer one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # The repo is public: a committed secret is a leaked secret.
+      - name: Secret scan
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.0 \
+            dir /repo --redact --no-banner
+
+      - name: Shell scripts
+        run: |
+          find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          find scripts -name '*.sh' -print0 | xargs -0 shellcheck
+
+      # The same check the deploy runs on the server. verify wants ExecStart's
+      # binary to exist, so it is installed where the units expect it.
+      - name: systemd units
+        run: |
+          sudo install -m 0755 scripts/backup.sh /usr/local/bin/t4a-backup.sh
+          systemd-analyze verify scripts/systemd/*.service scripts/systemd/*.timer
+
+      # Structure only: the .env files these reference, and the variables
+      # they set, live on the server. Empty stand-ins let `config` parse.
+      - name: Reference compose files
+        run: |
+          for f in docker/*/*/docker-compose.yaml; do
+            d=$(dirname "$f")
+            touch "$d/.env" "$d/.env.local"
+            echo "$f"
+            docker compose -f "$f" config --quiet --no-interpolate
+          done
+
+      - name: Workflows
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.7 -color
+
+      # Relative links only: the docs cross-link heavily (DRY docs).
+      - name: Markdown links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --no-progress --include-fragments '**/*.md'
+          fail: true
+
+  deploy:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # The PROD_DEPLOY_* SSH secrets are organization secrets, shared with the
+    # app repositories that deploy to the same VM.
+    environment: production
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    timeout-minutes: 15
+    env:
+      HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+      # The SSH login on the VM; override with the DEPLOY_USER variable.
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'deploy' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Trust only the host key whose fingerprint matches the secret, the same
+      # pin the app repositories give appleboy/ssh-action.
+      - name: SSH setup
+        env:
+          KEY: ${{ secrets.PROD_DEPLOY_SSH_KEY }}
+          FINGERPRINT: ${{ secrets.PROD_DEPLOY_FINGERPRINT }}
+        run: |
+          for v in HOST KEY FINGERPRINT; do
+            [ -n "${!v}" ] || { echo "::error::deploy secret for $v is empty or not shared with this repository"; exit 1; }
+          done
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 0600 ~/.ssh/deploy_key
+          ssh-keyscan -T 15 "$HOST" 2>/dev/null | while read -r line; do
+            fp=$(ssh-keygen -lf - <<<"$line" | awk '{print $2}')
+            if [ "$fp" = "$FINGERPRINT" ]; then echo "$line"; fi
+          done > ~/.ssh/known_hosts
+          [ -s ~/.ssh/known_hosts ] || { echo "::error::no host key of the server matches PROD_DEPLOY_FINGERPRINT"; exit 1; }
+
+      # Only the committed scripts/ tree is sent; the server needs no git and
+      # no read access to this repository.
+      - name: Install on the server
+        run: |
+          git archive --format=tar.gz HEAD scripts \
+            | ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=30 \
+                "$DEPLOY_USER@$HOST" "sudo -n /usr/local/sbin/t4a-ops-deploy $GITHUB_SHA"
+
+      - name: Remove key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

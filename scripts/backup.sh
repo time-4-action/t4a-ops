@@ -3,7 +3,10 @@
 # T4A backup — restic -> Hetzner Storage Box (SFTP).
 #
 # Usage:
-#   backup.sh [all|mariadb|wordpress|n8n|mongodb|configs|maintenance]
+#   backup.sh [all|mariadb|wordpress|n8n|mongodb|configs|maintenance|check]
+#
+# `check` only validates the config and the tools the backup needs; the deploy
+# runs it after every install (scripts/deploy/t4a-ops-deploy.sh).
 #
 # Config file: /etc/t4a-backup.env (see backup.env.example)
 # Runs as root. Depends on restic, mariadb-dump, docker, and ~/.ssh/config alias.
@@ -112,6 +115,16 @@ backup_mongodb() {
       --host "$BACKUP_HOST"
 }
 
+check_tools() {
+  local ok=1 cmd
+  for cmd in restic mariadb-dump mongodump docker; do
+    command -v "$cmd" >/dev/null || { echo "check: $cmd is not installed" >&2; ok=0; }
+  done
+  [[ -f "$RESTIC_PASSWORD_FILE" ]] || { echo "check: $RESTIC_PASSWORD_FILE does not exist" >&2; ok=0; }
+  [[ $ok -eq 1 ]] || exit 1
+  log "config and tools ok"
+}
+
 forget_old() {
   log "forget old snapshots per retention policy"
   restic forget \
@@ -145,7 +158,8 @@ main() {
       forget_old
       ;;
     maintenance) maintenance ;;
-    *) echo "usage: $0 [all|mariadb|wordpress|n8n|mongodb|configs|maintenance]" >&2; exit 2 ;;
+    check)       check_tools; return ;;
+    *) echo "usage: $0 [all|mariadb|wordpress|n8n|mongodb|configs|maintenance|check]" >&2; exit 2 ;;
   esac
   log "done ($target)"
 }

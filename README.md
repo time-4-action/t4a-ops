@@ -63,7 +63,8 @@ inventory/       Services, servers, repositories tables
 docker/t4a-t2/   Reference docker-compose files (secrets redacted)
 docs/runbooks/   Incident/fix guides
 docs/adr/        Architecture Decision Records
-scripts/         Automation scripts
+scripts/         Automation scripts (deployed to the server by CI)
+.github/         CI/CD: check on every PR, deploy on main
 ```
 
 ## Quick links
@@ -73,3 +74,4 @@ scripts/         Automation scripts
 - [Repository inventory](inventory/repositories.md)
 - [Docker configs](docker/t4a-t2/)
 - [Runbooks](docs/runbooks/)
+- [CI/CD](docs/runbooks/ops-deploy.md)

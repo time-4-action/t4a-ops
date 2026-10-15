@@ -1,0 +1,11 @@
+# GitHub Actions updates, batched into at most one pull request a month. Each
+# one goes through the `check` job like any other pull request.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

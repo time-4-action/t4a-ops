@@ -1,6 +1,6 @@
 [Unit]
 Description=T4A nightly backup (restic -> Hetzner Storage Box)
-Documentation=file:/root/t4a-ops/docs/runbooks/backup-restore.md
+Documentation=https://github.com/time-4-action/t4a-ops/blob/main/docs/runbooks/backup-restore.md
 Wants=network-online.target
 After=network-online.target mariadb.service
 
