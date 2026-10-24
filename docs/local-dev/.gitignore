@@ -1,0 +1,5 @@
+# The app repos are their own git repositories.
+/recharge-hub/
+/recharge-partners-integration-api/
+/rechargesi/
+/t4a-partner-portal/
