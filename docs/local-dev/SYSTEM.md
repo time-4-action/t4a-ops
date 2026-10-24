@@ -49,9 +49,17 @@ names for it in docs: *partner portal*, *Product Sync*, *patrik-products*.
 4. **Copies that must stay equal.** The portal UI's `src/lib/priceRounding.js` and
    `comparePrice.js` are ports of the API's `src/services/shopify/*.util.js`; the UI's
    `npm test` compares them when both repos are checked out side by side.
-5. **MetaKocka "available" stock** is the free amount (`free_amount`, or
-   `amount - reserved_amount`), summed over a warehouse's microlocations, never raw
-   `amount`. Both the portal API and the hub read MetaKocka; see each repo's notes.
+5. **MetaKocka stock is read the same way, published differently.** Both apps sum a
+   warehouse's microlocation rows per code and drop rows for another warehouse
+   (`wh_id_list` is not proven to filter). Then:
+   - the **portal** writes the *free* amount (`free_amount`, or `amount - reserved`)
+     to Shopify **available** (`warehouse.service.js`, `shopifySync.service.js`);
+   - the **hub** writes raw `amount` to Shopify **on_hand** and lets Shopify subtract
+     committed units (`src/jobs/handlers/sync-inventory.ts`,
+     `docs/metakocka-verification.md`).
+
+   Each takes reservations off once, so each is right for its own location. Never
+   point both at the same Shopify location: the numbers would disagree.
 
 ## Working here
 
