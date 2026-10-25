@@ -3,7 +3,7 @@
 > **Server:** t4a-t2 (AlmaLinux 9)
 > **Tool:** [restic](https://restic.net/) over SFTP
 > **Destination:** Hetzner Storage Box (SSH alias `t4a-storagebox`)
-> **Scope:** MariaDB (logical dumps), WordPress files (`/mnt/vdc/www/t4a`), n8n (Postgres dump + `/data/n8n` files), MongoDB (logical dump), server configs
+> **Scope:** MariaDB (logical dumps), WordPress files (`/mnt/vdc/www/t4a`), Recharge Hub (Postgres dump), MongoDB (logical dump), server configs
 > **Schedule:** nightly backup at ~03:00, weekly prune + integrity check Sun ~04:00
 > **Retention:** 7 daily, 4 weekly, 6 monthly (per `host,tags` group)
 >
@@ -15,8 +15,7 @@
 |----------------|----------------------------------------------|---------------------------------------------|
 | `mariadb`      | all databases                                | `mariadb-dump --single-transaction` via stdin |
 | `wordpress`    | `/mnt/vdc/www/t4a`                           | filesystem (excludes WP caches + `*.log`)   |
-| `n8n-postgres` | n8n PostgreSQL database                      | `docker exec n8n_postgres pg_dump --clean --if-exists` via stdin |
-| `n8n-files`    | `/data/n8n/n8n_data`, `/data/n8n/local-files` | filesystem (workflow defs, credentials, uploads) |
+| `hub-postgres` | Recharge Hub PostgreSQL database             | `docker exec $HUB_POSTGRES_CONTAINER pg_dump --clean --if-exists` via stdin |
 | `mongodb`      | all MongoDB databases (`/data/mongo`)        | `mongodump --uri=$MONGO_URI --archive` via stdin        |
 | `configs`      | `/etc/nginx`, `/etc/letsencrypt`, `/etc/my.cnf.d`, `/etc/mongod.conf`, `/etc/fstab`, systemd units, all docker-compose YAMLs + their `.env`/`.env.local` files under `/data/**/` | filesystem (explicit file list in `backup.env.example`) |
 
@@ -166,7 +165,7 @@ of this repo:
 Then edit `/etc/t4a-backup.env` — check every path in `BACKUP_PATHS_CONFIGS`
 exists on this host and comment out any that don't (e.g. certbot is left
 commented in the template until you confirm its exact layout). Also set
-`N8N_POSTGRES_CONTAINER` if the container name differs from `n8n_postgres`.
+`HUB_POSTGRES_CONTAINER` if the container name differs from `recharge-hub-postgres-1`.
 
 ```bash
 vi /etc/t4a-backup.env
@@ -181,7 +180,7 @@ see [backup-coverage.md](./backup-coverage.md).
 /usr/local/bin/t4a-backup.sh configs     # smallest, test paths first
 /usr/local/bin/t4a-backup.sh mariadb
 /usr/local/bin/t4a-backup.sh wordpress
-/usr/local/bin/t4a-backup.sh n8n         # requires the n8n_postgres container to be up
+/usr/local/bin/t4a-backup.sh hub         # requires the Hub postgres container to be up
 /usr/local/bin/t4a-backup.sh mongodb     # requires mongod to be up and MONGO_URI set
 
 # Confirm snapshots exist
@@ -189,7 +188,7 @@ restic -r "$RESTIC_REPOSITORY" -p /root/.restic-password snapshots
 ```
 
 You should see snapshots for each tag (`configs`, `mariadb`, `wordpress`,
-`n8n-postgres`, `n8n-files`, `mongodb`), all with host `t4a-t2`.
+`hub-postgres`, `mongodb`), all with host `t4a-t2`.
 
 ### 7. Enable the timers
 
@@ -281,37 +280,17 @@ mysql -u root -p -e "DROP DATABASE restore_test;"
 mysql -u root -p < /tmp/restore/all-databases.sql
 ```
 
-### Restore n8n (PostgreSQL + files)
+### Restore n8n (retired)
 
-n8n needs BOTH the `n8n-postgres` dump AND the `n8n-files` tree — the database
-holds workflows/executions, but `n8n_data` holds the encryption key and config
-that make the dumped credentials decryptable.
+n8n was deleted from the server on 2026-10-25. Its last snapshots stay in the
+repository: `n8n-files` from 2026-10-25 (`n8n_data`, `local-files` and the
+stopped Postgres data dir `postgres_data`) and the last `n8n-postgres` dump
+from 2026-05-31. `forget` keeps the newest snapshots of a tag group even when
+no new ones arrive, so they do not expire.
 
 ```bash
-# 1. Stop n8n (keep postgres up — we need it for psql).
-cd /data/n8n && docker compose stop n8n
-
-# 2. Restore files (workflow definitions, N8N_ENCRYPTION_KEY, local uploads).
-mkdir -p /tmp/restore
-restic restore latest --tag n8n-files --target /tmp/restore
-# Inspect /tmp/restore/data/n8n, then rsync into place:
-rsync -a --delete /tmp/restore/data/n8n/n8n_data/    /data/n8n/n8n_data/
-rsync -a --delete /tmp/restore/data/n8n/local-files/ /data/n8n/local-files/
-
-# 3. Restore the Postgres dump into the running container.
-restic restore latest --tag n8n-postgres --target /tmp/restore
-docker exec -i n8n_postgres \
-  sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  < /tmp/restore/n8n.sql
-
-# 4. Start n8n and verify.
-docker compose up -d n8n
-docker logs -f n8n
+restic restore latest --tag n8n-files --target /tmp/restore-n8n
 ```
-
-If workflow credentials show as "unable to decrypt", the `N8N_ENCRYPTION_KEY`
-in `/data/n8n/.env` no longer matches the one used when the dump was taken.
-Restore `/data/n8n/n8n_data/config` from the same snapshot as the SQL dump.
 
 ### Restore a MongoDB dump
 
@@ -365,9 +344,8 @@ fusermount -u /mnt/restic    # when done
 4. Install MariaDB per the [MariaDB Maintenance runbook](./mariadb-maintenance.md), then `restic restore latest --tag mariadb --target /tmp/restore && mysql < /tmp/restore/all-databases.sql`.
 5. `restic restore latest --tag wordpress --target /`.
 6. `systemctl daemon-reload && systemctl enable --now mariadb nginx docker t4a-backup.timer t4a-backup-maintenance.timer`.
-7. Restore n8n filesystem state: `restic restore latest --tag n8n-files --target /`.
-8. Bring docker stacks up (`docker compose up -d` in each stack directory: `/data/patrik/`, `/data/n8n/`, `/data/stack/apps/time-4-action/{admin,chat,export,mcp,sync}/`, `/data/certbot/`). Postgres will come up with an empty DB.
-9. Replay the n8n Postgres dump into the fresh container — see the "Restore n8n" section above.
+7. Bring docker stacks up (`docker compose up -d` in each stack directory: `/data/patrik/`, `/data/stack/apps/recharge-hub/`, `/data/stack/apps/time-4-action/{admin,chat,export,mcp,sync}/`, `/data/certbot/`). The Hub's Postgres will come up with an empty DB.
+8. Replay the Hub dump: `restic restore latest --tag hub-postgres --target /tmp/restore`, then `docker exec -i recharge-hub-postgres-1 sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < /tmp/restore/recharge-hub.sql`.
 
 ## Monitoring
 
@@ -401,7 +379,7 @@ Silent failures (backup never runs) are more dangerous than loud ones. Two simpl
 
 ## Troubleshooting
 
-### `config error: N8N_POSTGRES_CONTAINER is not set` / `Fatal: nothing to backup`
+### `config error: ... is not set` / `Fatal: nothing to backup`
 
 `/etc/t4a-backup.env` is missing variables that were added to `backup.env.example` after initial deploy. The install step (step 5) never overwrites an existing env file, so new keys must be merged by hand.
 

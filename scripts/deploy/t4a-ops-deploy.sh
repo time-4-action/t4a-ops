@@ -26,6 +26,8 @@ MANIFEST=(
   "scripts/systemd/t4a-backup-maintenance.service /etc/systemd/system/t4a-backup-maintenance.service 0644"
   "scripts/systemd/t4a-backup-maintenance.timer   /etc/systemd/system/t4a-backup-maintenance.timer   0644"
   "scripts/deploy/t4a-ops-deploy.sh               /usr/local/sbin/t4a-ops-deploy                     0755"
+  "scripts/firewall/t4a-docker-ports.sh           /usr/local/sbin/t4a-docker-ports                   0755"
+  "scripts/systemd/t4a-docker-ports.service       /etc/systemd/system/t4a-docker-ports.service       0644"
 )
 TIMERS=(t4a-backup.timer t4a-backup-maintenance.timer)
 

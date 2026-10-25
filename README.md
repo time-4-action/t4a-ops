@@ -13,7 +13,6 @@ Docker services run as independent Compose stacks behind an nginx reverse proxy 
 | patrik-api | 3000 | — |
 | patrik-products-automation | 3001 | — |
 | patrik-products-ui | 3002 | `product.t4a.etiam.si` |
-| n8n (+ postgres) | 5678 | — |
 | t4a-admin | 3005 | `admin.time-4-action.com` |
 | t4a-chat | 3003 | `chat.time-4-action.com` |
 | t4a-export-api | 3001 | — |
@@ -32,7 +31,6 @@ Docker services run as independent Compose stacks behind an nginx reverse proxy 
 ├── certbot/                          # SSL certs
 ├── patrik/                           # patrik-api
 ├── patrik-products/                  # products automation + UI
-├── n8n/                              # N8N + postgres
 └── stack/apps/time-4-action/
     ├── admin/                        # t4a-admin
     ├── chat/                         # t4a-chat
