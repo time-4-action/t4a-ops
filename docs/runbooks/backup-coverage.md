@@ -18,7 +18,8 @@ Green = safe. Yellow = partially covered or reconstructible with effort. Red = t
 | WordPress sites (files + MariaDB) | 🟢 covered |
 | System configs (nginx, letsencrypt, fstab, systemd, my.cnf.d, mongod.conf) | 🟢 covered |
 | Docker compose files + their `.env` secrets | 🟢 covered |
-| n8n (Postgres dump + `n8n_data` + `local-files`) | 🟢 covered |
+| n8n (`n8n_data` + `local-files` + stopped `postgres_data`; dump skipped while the container is down) | 🟢 covered |
+| Recharge Hub Postgres (`recharge-hub-postgres-1`) | 🟢 covered |
 | MongoDB (`/data/mongo`) | 🟢 covered |
 | Patrik SQLite DB (`/data/patrik/`) | 🔴 NOT covered |
 | T4A sync SQLite DB (`/data/stack/apps/time-4-action/sync/`) | 🔴 NOT covered |
@@ -26,17 +27,19 @@ Green = safe. Yellow = partially covered or reconstructible with effort. Red = t
 | BM25 indexes + MCP uploads | 🟡 reconstructible |
 | Export API data (`/data/stack/apps/time-4-action/export/api/data/`) | 🔴 NOT covered |
 | patrik-products CSV catalog (`/data/patrik-products/`) | 🔴 NOT covered |
+| mk-automation SQLite + public files (`/data/stack/apps/time-4-action/mk-automation/`) | 🔴 NOT covered |
 
 ## Tag → source map
 
-The nightly `t4a-backup.sh all` run creates one snapshot per tag below. `n8n` is a single sub-command that produces two snapshots (`n8n-postgres` + `n8n-files`).
+The nightly `t4a-backup.sh all` run creates one snapshot per tag below. `n8n` is a single sub-command that produces two snapshots (`n8n-postgres` + `n8n-files`); it skips the dump when the n8n Postgres container is not running. `all` runs every step even if one fails and exits 1 at the end if any did.
 
 | Tag | Source on server | Mechanism |
 |---|---|---|
 | `mariadb` | all MariaDB databases | `mariadb-dump --all-databases --single-transaction` → stdin → restic |
 | `wordpress` | `/mnt/vdc/www/t4a/` | restic filesystem backup, excludes WP caches + `*.log` |
 | `n8n-postgres` | n8n Postgres database inside `n8n_postgres` container | `docker exec … pg_dump --clean --if-exists` → stdin → restic |
-| `n8n-files` | `/data/n8n/n8n_data/` + `/data/n8n/local-files/` | restic filesystem backup |
+| `n8n-files` | `/data/n8n/n8n_data/` + `/data/n8n/local-files/` (+ `/data/n8n/postgres_data/` while n8n is stopped) | restic filesystem backup |
+| `hub-postgres` | Recharge Hub database inside `$HUB_POSTGRES_CONTAINER` | `docker exec … pg_dump --clean --if-exists` → stdin → restic (`recharge-hub.sql`) |
 | `mongodb` | all MongoDB databases (`/data/mongo`) | `mongodump --uri=$MONGO_URI --archive` → stdin → restic |
 | `configs` | system `/etc/*` (incl. `mongod.conf`) + all docker-compose `.yaml` + `.env` files | restic filesystem backup (explicit file list — see `backup.env.example`) |
 
@@ -55,7 +58,8 @@ Full path list for `configs` is in [`scripts/backup.env.example`](../../scripts/
 | **fstab / hosts** | `/etc/fstab`, `/etc/hosts` | `configs` tag | restore to `/` | |
 | **Backup systemd units** | `/etc/systemd/system/t4a-backup*` | `configs` tag | restore to `/` + `daemon-reload` | The backup backs up its own units so DR can re-enable the timer. |
 | **n8n (app)** | `/data/n8n/n8n_data/` + `/data/n8n/local-files/` | `n8n-files` tag | rsync from restore | Holds `N8N_ENCRYPTION_KEY` copy + workflow files. |
-| **n8n Postgres** | `/data/n8n/postgres_data/` (container volume) | `n8n-postgres` tag | `psql < n8n.sql` | Dump is taken via `docker exec pg_dump`. Container must be up. |
+| **n8n Postgres** | `/data/n8n/postgres_data/` (container volume) | `n8n-postgres` tag, or `n8n-files` while stopped | `psql < n8n.sql`, or restore the data dir and start postgres | Containers are gone since 2026-06-15; the last real dump is from 2026-05-31, after that the stopped data dir is backed up as files. |
+| **Recharge Hub Postgres** | `/data/stack/apps/recharge-hub/data/postgres` | `hub-postgres` tag | `psql < recharge-hub.sql` | Added 2026-10-25. A stopped container fails the backup. |
 | **n8n compose + env** | `/data/n8n/docker-compose.yaml` + `.env` | `configs` tag | restore to `/` | |
 | **Patrik compose + env** | `/data/patrik/docker-compose.yaml` + `.env` | `configs` tag | restore to `/` | 🔴 **App data** (`/data/patrik/` SQLite + cron.json + cron_state) is NOT backed up. |
 | **patrik-products catalog** | `/data/patrik-products/` | — | — | 🔴 Not backed up. Contains CSV product DB (~2k products) and category mappings. |

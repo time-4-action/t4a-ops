@@ -1,0 +1,15 @@
+[Unit]
+Description=T4A block outside access to Docker's published ports
+Documentation=https://github.com/time-4-action/t4a-ops/blob/main/scripts/firewall/t4a-docker-ports.sh
+# Docker recreates its chains on start; PartOf re-runs this after a Docker restart.
+After=docker.service firewalld.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/t4a-docker-ports
+
+[Install]
+WantedBy=docker.service
