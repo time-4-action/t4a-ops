@@ -7,8 +7,6 @@ Central registry mapping services to their repositories and deployment targets.
 | certbot | — | t4a-t2 | — | Active | SSL cert renewal via Let's Encrypt + Cloudflare DNS. Domain: `t4a.etiam.si`. Renews 30 days before expiry, reloads nginx on renewal. |
 | mongodb | `mongod` (dnf, bare-metal) | t4a-t2 | 27017 (localhost) | Active | MongoDB bare-metal install. Auth enabled. Data: `/data/mongo`. Config: `/etc/mongod.conf`. Logs: `/var/log/mongodb/mongod.log`. bindIp: 0.0.0.0 (firewall-protected). |
 | mariadb | `mariadb-server` (dnf) | t4a-t2 | 3306 (localhost) | Active | MariaDB 10.5.29. Database server for WordPress sites. Bare-metal install (not Docker). Datadir: `/mnt/vdc/mysql/`. Socket: `/mnt/vdc/mysql/mysql.sock`. Per-site DBs: `wp_{sitename}`. See [runbook](../docs/runbooks/mariadb-maintenance.md). |
-| n8n | `docker.n8n.io/n8nio/n8n` | t4a-t2 | 5678 (localhost) | Active | Workflow automation. Backed by n8n-postgres. Bound to 127.0.0.1 only (proxied via nginx). Env-based config via `.env`. |
-| n8n-postgres | `postgres:16-alpine` | t4a-t2 | 5432 (internal) | Active | PostgreSQL database for N8N. Healthcheck enabled. Data: `/data/n8n/postgres_data`. |
 | php-fpm | `php-fpm` (Remi 8.5) | t4a-t2 | `/run/php-fpm/www.sock` | Active | PHP process manager for WordPress. Bare-metal install via Remi repo. Runs as `nginx` user. Config: `/etc/php-fpm.d/www.conf`. |
 | patrik-api | `etiamsi/patrik-metakocka-automation-api` | t4a-t2 | 3000 | Active | Metakocka ERP sync API. Cron: warehouse sync every 15 min. Data: `/data/patrik`. SQLite DB. |
 | patrik-products-automation | `etiamsi/patrik-products-automation` | t4a-t2 | 3001 | Active | Product catalog automation. Data: `/data/patrik-products`. CSV product DB (~2k products). |

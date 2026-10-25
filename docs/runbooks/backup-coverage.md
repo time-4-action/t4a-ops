@@ -18,7 +18,7 @@ Green = safe. Yellow = partially covered or reconstructible with effort. Red = t
 | WordPress sites (files + MariaDB) | 🟢 covered |
 | System configs (nginx, letsencrypt, fstab, systemd, my.cnf.d, mongod.conf) | 🟢 covered |
 | Docker compose files + their `.env` secrets | 🟢 covered |
-| n8n (`n8n_data` + `local-files` + stopped `postgres_data`; dump skipped while the container is down) | 🟢 covered |
+| n8n | ⚫ retired 2026-10-25; last snapshots kept (see below) |
 | Recharge Hub Postgres (`recharge-hub-postgres-1`) | 🟢 covered |
 | MongoDB (`/data/mongo`) | 🟢 covered |
 | Patrik SQLite DB (`/data/patrik/`) | 🔴 NOT covered |
@@ -31,14 +31,12 @@ Green = safe. Yellow = partially covered or reconstructible with effort. Red = t
 
 ## Tag → source map
 
-The nightly `t4a-backup.sh all` run creates one snapshot per tag below. `n8n` is a single sub-command that produces two snapshots (`n8n-postgres` + `n8n-files`); it skips the dump when the n8n Postgres container is not running. `all` runs every step even if one fails and exits 1 at the end if any did.
+The nightly `t4a-backup.sh all` run creates one snapshot per tag below. `all` runs every step even if one fails and exits 1 at the end if any did.
 
 | Tag | Source on server | Mechanism |
 |---|---|---|
 | `mariadb` | all MariaDB databases | `mariadb-dump --all-databases --single-transaction` → stdin → restic |
 | `wordpress` | `/mnt/vdc/www/t4a/` | restic filesystem backup, excludes WP caches + `*.log` |
-| `n8n-postgres` | n8n Postgres database inside `n8n_postgres` container | `docker exec … pg_dump --clean --if-exists` → stdin → restic |
-| `n8n-files` | `/data/n8n/n8n_data/` + `/data/n8n/local-files/` (+ `/data/n8n/postgres_data/` while n8n is stopped) | restic filesystem backup |
 | `hub-postgres` | Recharge Hub database inside `$HUB_POSTGRES_CONTAINER` | `docker exec … pg_dump --clean --if-exists` → stdin → restic (`recharge-hub.sql`) |
 | `mongodb` | all MongoDB databases (`/data/mongo`) | `mongodump --uri=$MONGO_URI --archive` → stdin → restic |
 | `configs` | system `/etc/*` (incl. `mongod.conf`) + all docker-compose `.yaml` + `.env` files | restic filesystem backup (explicit file list — see `backup.env.example`) |
@@ -57,10 +55,8 @@ Full path list for `configs` is in [`scripts/backup.env.example`](../../scripts/
 | **MariaDB config** | `/etc/my.cnf.d` | `configs` tag | restore to `/` | |
 | **fstab / hosts** | `/etc/fstab`, `/etc/hosts` | `configs` tag | restore to `/` | |
 | **Backup systemd units** | `/etc/systemd/system/t4a-backup*` | `configs` tag | restore to `/` + `daemon-reload` | The backup backs up its own units so DR can re-enable the timer. |
-| **n8n (app)** | `/data/n8n/n8n_data/` + `/data/n8n/local-files/` | `n8n-files` tag | rsync from restore | Holds `N8N_ENCRYPTION_KEY` copy + workflow files. |
-| **n8n Postgres** | `/data/n8n/postgres_data/` (container volume) | `n8n-postgres` tag, or `n8n-files` while stopped | `psql < n8n.sql`, or restore the data dir and start postgres | Containers are gone since 2026-06-15; the last real dump is from 2026-05-31, after that the stopped data dir is backed up as files. |
+| **n8n (retired)** | deleted 2026-10-25 | `n8n-files` (2026-10-25, incl. `postgres_data`), `n8n-postgres` (2026-05-31) | `restic restore latest --tag n8n-files` | No new snapshots; `forget` keeps the newest of each tag, so these do not expire. |
 | **Recharge Hub Postgres** | `/data/stack/apps/recharge-hub/data/postgres` | `hub-postgres` tag | `psql < recharge-hub.sql` | Added 2026-10-25. A stopped container fails the backup. |
-| **n8n compose + env** | `/data/n8n/docker-compose.yaml` + `.env` | `configs` tag | restore to `/` | |
 | **Patrik compose + env** | `/data/patrik/docker-compose.yaml` + `.env` | `configs` tag | restore to `/` | 🔴 **App data** (`/data/patrik/` SQLite + cron.json + cron_state) is NOT backed up. |
 | **patrik-products catalog** | `/data/patrik-products/` | — | — | 🔴 Not backed up. Contains CSV product DB (~2k products) and category mappings. |
 | **T4A admin** | `/data/stack/apps/time-4-action/admin/` | compose + `.env.local` in `configs` | restore to `/` + `docker compose up -d` | No persistent runtime data (Next.js, stateless). |
@@ -76,7 +72,7 @@ Ranked by "how bad is it if we lose this tonight."
 
 ### 🔴 Critical — stop-the-business if lost
 
-None. The most business-critical state (MariaDB, n8n Postgres + files) is covered.
+None. The most business-critical state (MariaDB, Recharge Hub Postgres, MongoDB) is covered.
 
 ### 🔴 High — days of manual recovery work
 
@@ -98,7 +94,6 @@ None. The most business-critical state (MariaDB, n8n Postgres + files) is covere
 
 | Item | Why it's OK |
 |---|---|
-| n8n container volume (`/data/n8n/postgres_data/`) | Captured via logical `pg_dump` — more durable than volume copy. |
 | WordPress caches | Regenerated on next request. |
 | Docker images | Pulled from registries on recovery; not our data. |
 
@@ -116,7 +111,7 @@ Storage locations on server:
 
 Secrets included in backups:
 - All MariaDB data (including hashed WP admin passwords, site secrets).
-- `/data/n8n/n8n_data/` — includes copy of `N8N_ENCRYPTION_KEY` used to encrypt workflow credentials at rest.
+- The retired n8n snapshots (`n8n-files`) — include `N8N_ENCRYPTION_KEY` used to encrypt workflow credentials at rest.
 - `.env` / `.env.local` for every docker stack — Auth0 client secrets, Metakocka API keys, Gmail app passwords, Postgres passwords, etc.
 - `/etc/letsencrypt/` — SSL private keys.
 
@@ -132,7 +127,8 @@ Assumes `RESTIC_REPOSITORY` + `RESTIC_PASSWORD_FILE` are exported (or source `/e
 | Whole WordPress tree | `wordpress` | Restore the whole WordPress tree |
 | MariaDB dump | `mariadb` | Restore a MariaDB dump |
 | MongoDB dump | `mongodb` | Restore a MongoDB dump |
-| n8n workflows + Postgres | `n8n-files` + `n8n-postgres` | Restore n8n (PostgreSQL + files) |
+| Recharge Hub dump | `hub-postgres` | Full disaster recovery, step 8 |
+| Retired n8n | `n8n-files` | Restore n8n (retired) |
 | nginx config rollback | `configs` | (restore single path with `--include`) |
 | SSL certs | `configs` | (restore `/etc/letsencrypt/`) |
 | Full bare-metal | all | Full disaster recovery |
@@ -159,5 +155,6 @@ All `Time` columns in the snapshots output should be < 30h old. If a tag is miss
 
 ## Changelog
 
+- **2026-10-25** — Backup ran past the missing n8n container again (`all` no longer stops at the first failing step). Added the Recharge Hub Postgres (`hub-postgres`) and the compose/env files that exist under `/data/stack/apps`. n8n deleted from the server; its last snapshots are kept.
 - **2026-04-18** — Added MongoDB backup: `mongodump --archive` → restic `mongodb` tag. `/etc/mongod.conf` added to `configs` tag. Service registered in inventory.
 - **2026-04-17** — Initial coverage map. Added n8n (Postgres dump + files), replaced `/opt/docker/*` placeholder paths in `configs` tag with real `/data/*` compose + env paths. Gaps documented: Patrik/sync SQLite, patrik-products catalog, ChromaDB/BM25/uploads, export API data, certbot compose.

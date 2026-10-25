@@ -17,7 +17,7 @@ set -euo pipefail
 
 CHAIN=T4A-DOCKER-PORTS
 INTERFACES=(eth0 eth1)
-PORTS=(3000 3001 3002 3005 3333 4000 4545 8090)
+PORTS=(3000 3001 3002 3005 3333 4000 4545 8000 8001 8090)
 
 iptables -N "$CHAIN" 2>/dev/null || iptables -F "$CHAIN"
 for port in "${PORTS[@]}"; do

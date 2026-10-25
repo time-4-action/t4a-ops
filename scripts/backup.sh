@@ -3,13 +3,14 @@
 # T4A backup — restic -> Hetzner Storage Box (SFTP).
 #
 # Usage:
-#   backup.sh [all|mariadb|wordpress|n8n|hub|mongodb|configs|maintenance|check]
+#   backup.sh [all|mariadb|wordpress|hub|mongodb|configs|maintenance|check]
 #
 # `check` only validates the config and the tools the backup needs; the deploy
 # runs it after every install (scripts/deploy/t4a-ops-deploy.sh).
 #
 # `all` runs every step even when one fails, then exits 1 if any did, so one
-# broken step cannot silently skip the rest (n8n did that from 2026-06-15).
+# broken step cannot silently skip the rest (the retired n8n step did that
+# from 2026-06-15 to 2026-10-25).
 #
 # Config file: /etc/t4a-backup.env (see backup.env.example)
 # Runs as root. Depends on restic, mariadb-dump, docker, and ~/.ssh/config alias.
@@ -28,7 +29,7 @@ log() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
 validate_config() {
   local ok=1
   local required_vars=(RESTIC_REPOSITORY RESTIC_PASSWORD_FILE BACKUP_HOST MONGO_URI)
-  local required_arrays=(BACKUP_PATHS_WORDPRESS BACKUP_PATHS_N8N BACKUP_PATHS_CONFIGS)
+  local required_arrays=(BACKUP_PATHS_WORDPRESS BACKUP_PATHS_CONFIGS)
 
   for var in "${required_vars[@]}"; do
     if [[ -z "${!var:-}" ]]; then
@@ -87,10 +88,6 @@ backup_configs() {
     "${BACKUP_PATHS_CONFIGS[@]}"
 }
 
-container_running() {
-  [[ -n "$1" && -n "$(docker ps -q --filter "name=^$1\$")" ]]
-}
-
 # dump_postgres CONTAINER FILENAME TAG
 # pg_dump runs inside the container so we do not need a postgres client
 # on the host. PGPASSWORD + -U come from the container's own env.
@@ -104,27 +101,7 @@ dump_postgres() {
       --host "$BACKUP_HOST"
 }
 
-backup_n8n() {
-  local rc=0
-  # n8n's containers are gone since 2026-06-15 but its files are still on
-  # disk: skip the dump while the container is not running, keep the files.
-  if container_running "${N8N_POSTGRES_CONTAINER:-}"; then
-    log "dump n8n PostgreSQL -> restic (tag=n8n-postgres)"
-    dump_postgres "$N8N_POSTGRES_CONTAINER" n8n.sql n8n-postgres || rc=1
-  else
-    log "n8n PostgreSQL container '${N8N_POSTGRES_CONTAINER:-}' not running, skipping its dump"
-  fi
-
-  log "backup n8n files -> restic (tag=n8n-files)"
-  restic backup \
-    --tag n8n-files \
-    --host "$BACKUP_HOST" \
-    "${BACKUP_PATHS_N8N[@]}" || rc=1
-  return $rc
-}
-
 backup_hub() {
-  # Unlike n8n, a configured Hub container that is not running is a failure.
   if [[ -z "${HUB_POSTGRES_CONTAINER:-}" ]]; then
     log "HUB_POSTGRES_CONTAINER not set, skipping Recharge Hub"
     return 0
@@ -181,12 +158,11 @@ main() {
     mariadb)     backup_mariadb ;;
     wordpress)   backup_wordpress ;;
     configs)     backup_configs ;;
-    n8n)         backup_n8n ;;
     hub)         backup_hub ;;
     mongodb)     backup_mongodb ;;
     all)
       local failed=() step
-      for step in backup_mariadb backup_wordpress backup_n8n backup_hub backup_mongodb backup_configs forget_old; do
+      for step in backup_mariadb backup_wordpress backup_hub backup_mongodb backup_configs forget_old; do
         run_step "$step"
       done
       if [[ ${#failed[@]} -gt 0 ]]; then
@@ -196,7 +172,7 @@ main() {
       ;;
     maintenance) maintenance ;;
     check)       check_tools; return ;;
-    *) echo "usage: $0 [all|mariadb|wordpress|n8n|hub|mongodb|configs|maintenance|check]" >&2; exit 2 ;;
+    *) echo "usage: $0 [all|mariadb|wordpress|hub|mongodb|configs|maintenance|check]" >&2; exit 2 ;;
   esac
   log "done ($target)"
 }
