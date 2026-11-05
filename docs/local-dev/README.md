@@ -1,5 +1,10 @@
 # ~/t4a local dev
 
+These files (`dev.sh`, `docker-compose.yml`, `.gitignore`, this README and `SYSTEM.md`) belong in the
+root of a local workspace, e.g. `~/t4a`, next to clones of `rechargesi`, `recharge-hub`,
+`recharge-partners-integration-api` and `t4a-partner-portal/{t4a-partner-portal-api,t4a-partner-portal-ui}`.
+Copy them there; `dev.sh` finds the apps relative to its own directory.
+
 What each app is and how they connect: [SYSTEM.md](SYSTEM.md).
 
 Start each app in its own terminal with `./dev.sh <app>`:
