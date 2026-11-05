@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-04-18
 - **Author:** grega-rotar
+- **Amended:** 2026-11-03: the files moved to the `t4a` bucket in `hel1` with the same keys, and the public base is now `https://assets.patrik-international.com` (Traefik on t4a proxies it to the bucket). The `fsn1` URLs below are historical.
 
 ## Context
 
