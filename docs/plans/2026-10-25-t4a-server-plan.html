@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>t4a Server Plan</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --text: #1f1e1b; --muted: #6b6860; --rule: #e4e1d8;
+    --line: #a9a597; --accent: #2f6fd6; --accent-tint: rgba(47, 111, 214, 0.12); --code: #f1efe8;
+    --link: #2459b3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1a18; --surface: #232220; --text: #ecebe6; --muted: #a3a097; --rule: #3a3833;
+      --line: #75726a; --accent: #6e9ef0; --accent-tint: rgba(110, 158, 240, 0.16); --code: #2c2b28;
+      --link: #8fb4f5;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1a18; --surface: #232220; --text: #ecebe6; --muted: #a3a097; --rule: #3a3833;
+    --line: #75726a; --accent: #6e9ef0; --accent-tint: rgba(110, 158, 240, 0.16); --code: #2c2b28;
+    --link: #8fb4f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+  .byline { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+  h2 { font-size: 21px; margin: 44px 0 10px; padding-top: 12px; border-top: 1px solid var(--rule); }
+  p { margin: 0 0 14px; }
+  a { color: var(--link); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  .table-wrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 600; background: var(--code); }
+  tr:last-child td { border-bottom: 0; }
+  ul.tasks { list-style: none; padding: 0; margin: 0 0 16px; }
+  ul.tasks li { display: flex; gap: 10px; align-items: flex-start; padding: 4px 0; }
+  ul.tasks input { margin-top: 5px; width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+  ul.tasks li.done span { color: var(--muted); text-decoration: line-through; }
+  ol { padding-left: 22px; margin: 0 0 16px; }
+  ol > li { margin-bottom: 8px; }
+  ol ul { margin: 4px 0 0; padding-left: 18px; }
+  figure { margin: 8px 0 14px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  svg .box { fill: none; stroke: var(--line); stroke-width: 1.25; }
+  svg .box.main { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 2; }
+  svg .edge { fill: none; stroke: var(--line); stroke-width: 1.25; }
+  svg .head { fill: var(--line); }
+  svg text { fill: var(--text); font-family: inherit; }
+  svg .t { font-size: 15px; font-weight: 600; }
+  svg .n { font-size: 13px; font-weight: 600; }
+  svg .s { font-size: 11.5px; }
+  svg .q { fill: var(--muted); }
+  .theme-toggle {
+    position: fixed; top: 12px; right: 12px; border: 1px solid var(--rule); background: var(--surface);
+    color: var(--text); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" type="button" id="theme-toggle">Theme</button>
+<main>
+  <h1>t4a Server Plan</h1>
+  <div class="byline">As of 2026-10-25</div>
+
+  <h2>Where things run today</h2>
+  <p>T-2 runs 19 things today: apps, WordPress sites, databases, monitoring and leftovers. Hetzner runs only jakamarinko, rokomet-stats and ld-docs. Everything sits behind Cloudflare. Full T-2 inventory checked on 2026-10-25.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Server</th><th>Provider</th><th>Size</th><th>Runs</th></tr>
+    <tr><td>t4a-t2 (194.28.111.245)</td><td>T-2, Slovenia (OpenStack, AlmaLinux 9)</td><td>2 vCPU, 3.6 GB RAM, 1 GB already in swap</td><td>Recharge Hub, export portal API and UI, partners integration API, admin, chat, mcp, mk-automation, n8n, patrik, WordPress, MongoDB 8.2</td></tr>
+    <tr><td>t4a (77.42.42.60)</td><td>Hetzner Cloud, Helsinki (Ubuntu 26.04)</td><td>4 vCPU, 7.6 GB RAM (about 5 GB free), 2 GB swap, 60 GB free disk</td><td>jakamarinko, rokomet-stats, ld-docs, shared Postgres 18, Traefik</td></tr>
+  </table></div>
+  <div class="table-wrap"><table>
+    <tr><th>What on T-2</th><th>Domain</th><th>State</th><th>Data</th><th>Plan</th></tr>
+    <tr><td>Recharge Hub</td><td>recharge-hub.time-4-action.com</td><td>Running</td><td>Own Postgres 16, 2.6 GB</td><td>Move, into shared Postgres</td></tr>
+    <tr><td>Export portal API</td><td>api.time-4-action.com</td><td>Running</td><td>MongoDB <code>t4a</code> (15 MB, shared)</td><td>Move, then Postgres</td></tr>
+    <tr><td>Export portal UI</td><td>export.time-4-action.com</td><td>Running</td><td>None</td><td>Move</td></tr>
+    <tr><td>Partners integration API</td><td>recharge-sources.time-4-action.com</td><td>Running</td><td>MongoDB <code>recharge</code> (1 MB)</td><td>Move, then Postgres</td></tr>
+    <tr><td>t4a-admin</td><td>b2b.time-4-action.com</td><td>Running</td><td>MongoDB <code>t4a</code></td><td>Move, then Postgres</td></tr>
+    <tr><td>t4a-chat</td><td>chat.time-4-action.com</td><td>Running, host networking</td><td>MongoDB <code>t4a</code></td><td>Move, then Postgres</td></tr>
+    <tr><td>patrik-warranty-form</td><td>warranty-preview.time-4-action.com</td><td>Running</td><td>MongoDB <code>patrik</code> (107 claims)</td><td>Move, then Postgres</td></tr>
+    <tr><td>t4a-mk-automation</td><td>mkauto.time-4-action.com</td><td>Running</td><td>Files, 665 MB</td><td>Move</td></tr>
+    <tr><td>WordPress patrik-web</td><td>patrik-web.time-4-action.com</td><td>Running (PHP-FPM)</td><td>MariaDB, 112 MB</td><td>Move, stays MariaDB</td></tr>
+    <tr><td>WordPress the-chase-project</td><td>the-chase-project.com</td><td>Running (PHP-FPM)</td><td>MariaDB, 18 MB</td><td>Move, stays MariaDB</td></tr>
+    <tr><td>time-4-action.com website</td><td>www.time-4-action.com</td><td>Running (PHP)</td><td>Files</td><td>Move</td></tr>
+    <tr><td>patrik-international.com, assets</td><td>patrik-international.com</td><td>nginx proxy to Hetzner Object Storage</td><td>None</td><td>Move the proxy rule</td></tr>
+    <tr><td>Mail autodiscover server</td><td>autodiscover, autoconfig .time-4-action.com</td><td>Running (Node, systemd)</td><td>None</td><td>Move; mail itself is hosted by T-2 (MX mx1.t-2.si)</td></tr>
+    <tr><td>Uptime Kuma, Beszel</td><td>status., monitor.time-4-action.com</td><td>Running</td><td>0.8 GB Kuma history</td><td>Move (Phase 2)</td></tr>
+    <tr><td>t4a-mcp</td><td>mcp.time-4-action.com</td><td>Running (back 2026-10-25)</td><td>ChromaDB files 80 MB</td><td>Keep; move with the other apps</td></tr>
+    <tr><td>n8n</td><td>n8n.time-4-action.com</td><td>Deleted 2026-10-25</td><td>Last snapshot kept in restic</td><td>Retired</td></tr>
+    <tr><td>patrik API, products, UI, t4a-sync</td><td>none</td><td>Gone, folders left</td><td>SQLite, old .env</td><td>Archive and delete</td></tr>
+    <tr><td>Prometheus, Grafana, node_exporter</td><td>none</td><td>Disabled since Sep 18</td><td>4.1 GB metrics</td><td>Delete</td></tr>
+    <tr><td>mail-migration, patrik-test</td><td>none</td><td>Finished in May / unused</td><td>Files</td><td>Archive and delete</td></tr>
+    <tr><td>rechargesi theme</td><td>recharge.si</td><td>Hosted by Shopify</td><td>None</td><td>Not on T-2</td></tr>
+  </table></div>
+  <p>MongoDB is small in total (<code>t4a</code> 15 MB, <code>recharge</code> 1 MB, <code>patrik</code> a few hundred documents), so moving the data is quick. The work is in the code: the <code>t4a</code> database is shared by the portal, admin, chat and mcp.</p>
+
+  <h2>Done so far</h2>
+  <p>The Hetzner server now has a production-grade Postgres that can be restored to any minute, and T-2 is no longer out of disk.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Date</th><th>Server</th><th>What</th></tr>
+    <tr><td>2026-10-25</td><td>Hetzner</td><td>Postgres switched to tuned config (1 GB buffers, slow-query log, query statistics, connection limits). Restart took about 11 s.</td></tr>
+    <tr><td>2026-10-25</td><td>Hetzner</td><td>Continuous backups with pgBackRest to the Storage Box: at most about 5 minutes of data loss, any minute of the last 1 to 2 weeks restorable. First full backup done.</td></tr>
+    <tr><td>2026-10-25</td><td>Hetzner</td><td>Restore drill passed: a row written after the backup came back, all 23 jakamarinko tables match.</td></tr>
+    <tr><td>2026-10-25</td><td>Hetzner</td><td>2 GB swap added, log rotation for backup logs.</td></tr>
+    <tr><td>2026-10-25</td><td>T-2</td><td>/data disk was 100% full, now 62%: emptied a 1.6 GB log, removed about 6 GB of old Docker images.</td></tr>
+    <tr><td>2026-10-25</td><td>T-2</td><td>Phase 0 done. Nightly backup runs past the missing n8n container again and now includes the Recharge Hub database (3.5 GB dump, checked complete); full run passed. Ports 3000 to 8090 closed to the internet, sites behind Cloudflare unaffected. Failing certbot renewals and Prometheus/Grafana removed; /data at 43%. <a href="https://github.com/time-4-action/t4a-ops/pull/9">t4a-ops PR #9</a>.</td></tr>
+    <tr><td>2026-10-25</td><td>GitHub</td><td>Server config moved into time-4-action/t4a-infra under servers/t4a, <a href="https://github.com/time-4-action/t4a-infra/pull/3">PR #3</a> open for review.</td></tr>
+    <tr><td>2026-10-25</td><td>Hetzner</td><td>MariaDB 11.4 LTS for WordPress, plus a one-command new-site script (PHP 8.5, behind Traefik). Nightly MariaDB dumps in the backup. Tested with a throwaway site, including backup and restore, then removed.</td></tr>
+    <tr><td>2026-10-25</td><td>Both</td><td>Phase 1 alerting installed and tested on both servers: a backup failure posts to Slack at once, and a summary of every backup, disk and RAM follows at 05:00 UTC. Posting to #t4a-server as the "t4a server" Slack app. t4a-infra PR #5, merged.</td></tr>
+  </table></div>
+
+  <h2>Plan at a glance</h2>
+  <figure>
+    <svg viewBox="0 0 760 348" role="img" aria-label="Fix T-2 first, then alerts, the move, and everything on Postgres">
+      <defs><marker id="road-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head" d="M0 0L10 5L0 10z"/></marker></defs>
+      <text class="t" x="24" y="34">Fix T-2 first, then alerts, the move, and everything on Postgres</text>
+      <path class="edge" d="M184 104H208" marker-end="url(#road-arrow)"/>
+      <path class="edge" d="M368 104H392" marker-end="url(#road-arrow)"/>
+      <path class="edge" d="M552 104H576" marker-end="url(#road-arrow)"/>
+      <path class="edge" d="M726 148V212" marker-end="url(#road-arrow)"/>
+      <path class="edge" d="M576 256H552" marker-end="url(#road-arrow)"/>
+      <g text-anchor="middle">
+        <rect class="box main" x="24" y="60" width="160" height="88" rx="8"/>
+        <text class="n" x="104" y="84">0 Fix T-2 now</text>
+        <text class="s" x="104" y="106">Backups failing</text>
+        <text class="s" x="104" y="122">Ports open</text>
+        <text class="s q" x="104" y="138">about 2 hours</text>
+        <text class="s q" x="104" y="176">can start today</text>
+
+        <rect class="box" x="208" y="60" width="160" height="88" rx="8"/>
+        <text class="n" x="288" y="84">1 Slack alerts</text>
+        <text class="s" x="288" y="106">Daily summary</text>
+        <text class="s" x="288" y="122">Failure alerts</text>
+        <text class="s q" x="288" y="138">2 to 3 hours</text>
+        <text class="s q" x="288" y="176">needs Slack webhook</text>
+
+        <rect class="box" x="392" y="60" width="160" height="88" rx="8"/>
+        <text class="n" x="472" y="84">2 Monitoring</text>
+        <text class="s" x="472" y="106">Beszel, Uptime Kuma</text>
+        <text class="s" x="472" y="122">Backrest, PgHero</text>
+        <text class="s q" x="472" y="138">about half a day</text>
+        <text class="s q" x="472" y="176">needs Kuma, Beszel logins</text>
+
+        <rect class="box" x="576" y="60" width="160" height="88" rx="8"/>
+        <text class="n" x="656" y="84">3 Maintenance</text>
+        <text class="s" x="656" y="106">Slack command</text>
+        <text class="s" x="656" y="122">Banners, down page</text>
+        <text class="s q" x="656" y="138">about 1 day</text>
+
+        <rect class="box" x="576" y="212" width="160" height="88" rx="8"/>
+        <text class="n" x="656" y="236">4 Leave T-2</text>
+        <text class="s" x="656" y="258">Every app and site</text>
+        <text class="s" x="656" y="274">3 short windows</text>
+        <text class="s q" x="656" y="290">2 to 3 days</text>
+
+        <rect class="box" x="392" y="212" width="160" height="88" rx="8"/>
+        <text class="n" x="472" y="236">5 All on Postgres</text>
+        <text class="s" x="472" y="258">Portal, admin, chat</text>
+        <text class="s" x="472" y="274">Warranty, partners</text>
+        <text class="s q" x="472" y="290">about 2 weeks</text>
+        <text class="s q" x="472" y="324">ends with MongoDB switched off</text>
+      </g>
+      <text class="s q" x="712" y="176" text-anchor="end">uses Phase 1 Slack app</text>
+    </svg>
+  </figure>
+  <p>Phase 0 cannot wait. After it, each phase builds on the one before: the Slack app from Phase 1 carries the maintenance command, that command announces the migration windows, and Phase 5 moves the databases once the apps sit on Hetzner.</p>
+  <p>Estimates assume agentic work: Claude writes the code, runs the tests and makes the server changes; you review pull requests and approve each switch. Your review time and the maintenance windows set the pace, not typing.</p>
+
+  <h2>Phase 0: Fix T-2 now</h2>
+  <p>T-2 has had no backup of MongoDB, n8n files or its configs since 2026-06-15, and the Recharge Hub database (orders, campaigns) has never been backed up there. Effort: about 2 hours, no downtime.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Problem</th><th>Since</th><th>Fix</th></tr>
+    <tr><td>Nightly backup stops at the n8n step because n8n's container is gone, so MongoDB, n8n files and configs never run</td><td>2026-06-15</td><td>Skip n8n, run the rest, then check the snapshots</td></tr>
+    <tr><td>Recharge Hub Postgres (2.6 GB) is not in T-2's backup at all</td><td>Always</td><td>Add a nightly pg_dump of the Hub</td></tr>
+    <tr><td>Ports 3000, 3001, 3002, 3005, 3333, 4000, 4545 and 8090 answer straight from the internet, bypassing Cloudflare</td><td>Unknown</td><td>Block outside access in the firewall's Docker rules; no restarts</td></tr>
+    <tr><td>certbot renewal fails every day for an unused time-4-action.com certificate (nginx uses Cloudflare origin certs)</td><td>Unknown</td><td>Remove that renewal config</td></tr>
+    <tr><td>mcp.time-4-action.com and n8n.time-4-action.com point at services that are not running</td><td>2026-10-15 (mcp)</td><td>n8n deleted. mcp kept and back up 2026-10-25 (<a href="https://github.com/time-4-action/t4a-mcp/pull/14">t4a-mcp PR #14</a>); it had been down since its 2026-10-15 deploy hit the full disk</td></tr>
+  </table></div>
+  <ul class="tasks">
+    <li><input type="checkbox" checked><span>Fix the backup and run it once by hand</span></li>
+    <li><input type="checkbox" checked><span>Add the Hub to the backup</span></li>
+    <li><input type="checkbox" checked><span>Close the open ports</span></li>
+    <li><input type="checkbox" checked><span>Remove the broken certbot renewal</span></li>
+    <li><input type="checkbox" checked><span>Delete the 4.1 GB of Prometheus data and the Grafana leftovers</span></li>
+  </ul>
+
+  <h2>Phase 1: Slack alerts and daily summary</h2>
+  <p>One Slack channel tells you every morning that all is fine, and tells you at once when something breaks. Done 2026-10-25.</p>
+  <ul class="tasks">
+    <li class="done"><input type="checkbox" checked><span>Slack app "t4a server" posting into #t4a-server</span></li>
+    <li class="done"><input type="checkbox" checked><span>Backup scripts post to Slack on failure, and a daily summary at 06:00 CET: every backup with time and size (red when older than 26 h, so a backup that never ran shows too), the Postgres restore window, disk, RAM and containers on both servers</span></li>
+    <li><input type="checkbox"><span>Backup heartbeat URLs in /etc/t4a-heartbeat.env, so a server that is down entirely also alerts (Phase 2)</span></li>
+    <li class="done"><input type="checkbox" checked><span>Documented in t4a-infra servers/alerts/README.md</span></li>
+  </ul>
+
+  <h2>Phase 2: Monitoring and backup visibility</h2>
+  <p>Four small tools cover what you want to see; no Prometheus or Grafana, which was tried on T-2 and switched off in September. Effort: about half a day.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Tool</th><th>Shows you</th><th>Where</th><th>Alerts to Slack</th></tr>
+    <tr><td>Beszel</td><td>CPU, RAM, disk, containers of both servers</td><td>Hub already on T-2, add an agent on Hetzner</td><td>Disk over 80%, high RAM, server down</td></tr>
+    <tr><td>Uptime Kuma</td><td>Every app's health check, backup heartbeats as green or red per day</td><td>Already on T-2</td><td>Site down, backup missing</td></tr>
+    <tr><td>Backrest</td><td>Restic snapshots: browse, sizes, restore a single file in the browser</td><td>New on Hetzner, behind Traefik with a login</td><td>Backup failed</td></tr>
+    <tr><td>PgHero</td><td>Slow queries, missing indexes, table sizes, connections</td><td>New on Hetzner, behind Traefik with a login</td><td>None needed</td></tr>
+  </table></div>
+  <ul class="tasks">
+    <li><input type="checkbox"><span>Beszel agent on Hetzner, disk and RAM alerts</span></li>
+    <li><input type="checkbox"><span>Kuma: HTTP checks for every app, two push monitors for the backups</span></li>
+    <li><input type="checkbox"><span>Backrest on the existing restic repo</span></li>
+    <li><input type="checkbox"><span>PgHero on the shared Postgres</span></li>
+    <li><input type="checkbox"><span>When T-2 is retired: move Beszel and Kuma to Hetzner and add one free outside check that watches the monitor itself</span></li>
+  </ul>
+
+  <h2>Phase 3: Maintenance from Slack</h2>
+  <p>A slash command in Slack puts a banner in every app, or a maintenance page in front of chosen sites. Effort: about 1 day, including the banner in every app. Built before the migration so the moves can be announced with it.</p>
+  <figure>
+    <svg viewBox="0 0 760 262" role="img" aria-label="One Slack command drives every banner and the down page">
+      <defs><marker id="mnt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head" d="M0 0L10 5L0 10z"/></marker></defs>
+      <text class="t" x="24" y="34">One Slack command drives every banner and the down page</text>
+      <path class="edge" d="M174 100H208" marker-start="url(#mnt-arrow)" marker-end="url(#mnt-arrow)"/>
+      <path class="edge" d="M358 100H392" marker-end="url(#mnt-arrow)"/>
+      <path class="edge" d="M542 100H576" marker-end="url(#mnt-arrow)"/>
+      <path class="edge" d="M243 128V210H174" marker-end="url(#mnt-arrow)"/>
+      <path class="edge" d="M323 128V210H392" marker-end="url(#mnt-arrow)"/>
+      <g text-anchor="middle">
+        <rect class="box" x="24" y="72" width="150" height="56" rx="8"/>
+        <text class="n" x="99" y="96">Slack</text>
+        <text class="s q" x="99" y="114">/maintenance</text>
+        <rect class="box main" x="208" y="72" width="150" height="56" rx="8"/>
+        <text class="n" x="283" y="96">t4a-status</text>
+        <text class="s" x="283" y="114">checks signature</text>
+        <rect class="box" x="392" y="72" width="150" height="56" rx="8"/>
+        <text class="n" x="467" y="96">banner.json</text>
+        <text class="s q" x="467" y="114">public, cached</text>
+        <rect class="box" x="576" y="72" width="150" height="56" rx="8"/>
+        <text class="n" x="651" y="96">Apps</text>
+        <text class="s q" x="651" y="114">show the banner</text>
+        <rect class="box" x="24" y="182" width="150" height="56" rx="8"/>
+        <text class="n" x="99" y="206">Shared Postgres</text>
+        <text class="s q" x="99" y="224">maintenance state</text>
+        <rect class="box" x="392" y="182" width="150" height="56" rx="8"/>
+        <text class="n" x="467" y="206">Traefik</text>
+        <text class="s q" x="467" y="224">down page for sites</text>
+        <text class="s q" x="191" y="62">command, confirmation</text>
+        <text class="s q" x="559" y="62">polled every minute</text>
+      </g>
+      <text class="s q" x="235" y="172" text-anchor="end">stores</text>
+      <text class="s q" x="331" y="172">down mode</text>
+    </svg>
+  </figure>
+  <p>Apps only read banner.json, so a new app joins by adding the banner component; down mode bypasses the apps entirely.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Command</th><th>What users see</th></tr>
+    <tr><td><code>/maintenance announce "DB move" tomorrow 22:00 30m</code></td><td>Yellow banner in every app from now until the window ends</td></tr>
+    <tr><td><code>/maintenance down "Moving servers"</code></td><td>Traefik serves a "We'll be right back" page for the chosen sites</td></tr>
+    <tr><td><code>/maintenance end</code></td><td>Banner and page gone, a confirmation in Slack</td></tr>
+    <tr><td><code>/maintenance status</code></td><td>What is active right now</td></tr>
+  </table></div>
+  <ul class="tasks">
+    <li><input type="checkbox"><span>Small service t4a-status on Hetzner (status.time-4-action.com): receives the Slack command, checks Slack's signature, stores state in the shared Postgres, serves banner.json</span></li>
+    <li><input type="checkbox"><span>Traefik switch for down mode via a file in dynamic/, picked up live</span></li>
+    <li><input type="checkbox"><span>Banner component in portal UI, Recharge Hub, admin and chat</span></li>
+    <li><input type="checkbox"><span>Decide for customer-facing sites (recharge.si storefront, jakamarinko): down page only, or a softer banner</span></li>
+  </ul>
+
+  <h2>Phase 4: Move everything off T-2</h2>
+  <p>Everything in the T-2 table moves to Hetzner or is retired, so the T-2 server can be cancelled. Hetzner has room: T-2 uses about 2.4 GB of RAM and 13 GB of data, Hetzner has about 5 GB of RAM and 60 GB of disk free. Effort: 2 to 3 days of agent work, spread over 3 short maintenance windows. Each step keeps the T-2 copy stopped but intact for two weeks.</p>
+  <ol>
+    <li>Preparation, no downtime
+      <ul>
+        <li>Check whether MetaKocka, PNV, POINT-7 or Unifiber only accept T-2's IP</li>
+        <li>Cloudflare origin certificates in Traefik for time-4-action.com, patrik-international.com and the-chase-project.com</li>
+        <li>MongoDB 8 container on Hetzner (internal network only) and a MariaDB container for WordPress</li>
+        <li>Per repo, a PR with Traefik labels, no ports on 0.0.0.0, deploy paths and deploy secrets (deploy secrets need an org admin)</li>
+      </ul>
+    </li>
+    <li>Stateless and small, no window: export portal UI, mk-automation, the patrik-international.com proxy, the mail autodiscover server, time-4-action.com website files</li>
+    <li>Window 1, MongoDB apps: stop on T-2, copy all three MongoDB databases (about 20 MB), start on Hetzner: portal API, partners API, admin, chat, warranty form. Chat drops host networking</li>
+    <li>Window 2, Recharge Hub: stop web, worker and Postgres; pg_dump from 16, restore into the shared 18; copy .env with ENCRYPTION_KEY; check one inventory sync and the app in Shopify admin</li>
+    <li>Window 3, WordPress: patrik-web and the-chase-project with PHP-FPM in Docker, MariaDB dump and restore (130 MB), 5.3 GB of site files copied ahead and synced again in the window</li>
+    <li>Monitoring: Uptime Kuma and Beszel move to Hetzner, plus one free outside check that watches them</li>
+    <li>Retire: archive then delete patrik API, products, UI and t4a-sync folders, Prometheus, Grafana, mail-migration and patrik-test; n8n and mcp per your decision</li>
+    <li>Cancel the T-2 server after two quiet weeks. Mail runs on T-2's mail servers (MX mx1.t-2.si), which looks like a separate T-2 product; confirm with T-2 that cancelling the server leaves mail alone</li>
+  </ol>
+
+  <h2>Phase 5: Everything on Postgres</h2>
+  <p>Every app ends on the shared Postgres and MongoDB is switched off; WordPress is the one exception, it only runs on MySQL or MariaDB. About 2 weeks of agent work in total, measured from each repo's code; the export portal API and t4a-admin are most of it. Each app moves on its own, never in the same step as a server move.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Order</th><th>App</th><th>Database today</th><th>Size of the change</th><th>Effort</th></tr>
+    <tr><td>1</td><td>Partners integration API</td><td>MongoDB <code>recharge</code>, run history only</td><td>9 files, about 11 queries</td><td>2 to 3 hours</td></tr>
+    <tr><td>2</td><td>patrik-warranty-form</td><td>MongoDB <code>patrik</code>, 107 claims</td><td>9 files, about 17 queries</td><td>Half a day</td></tr>
+    <tr><td>3</td><td>t4a-mcp (if kept)</td><td>Reads the portal's products in <code>t4a</code></td><td>7 files, 3 aggregations; switch to the portal's HTTP API</td><td>Half a day</td></tr>
+    <tr><td>4</td><td>t4a-chat</td><td>Own collections in <code>t4a</code></td><td>27 files, 9 schemas, about 53 queries</td><td>1 day</td></tr>
+    <tr><td>5</td><td>t4a-admin</td><td>Own collections in <code>t4a</code></td><td>97 files, 14 schemas, about 300 queries, 4 aggregations</td><td>2 to 3 days</td></tr>
+    <tr><td>6</td><td>Export portal API</td><td><code>t4a</code>: products, feeds, exports, analytics</td><td>28 files, about 190 queries, 9 aggregations, every Shopify push re-tested</td><td>4 to 6 days</td></tr>
+    <tr><td>none</td><td>n8n (if kept)</td><td>Own Postgres container</td><td>Move into the shared Postgres</td><td>1 hour</td></tr>
+    <tr><td>none</td><td>WordPress sites</td><td>MariaDB</td><td>Stays: WordPress needs MySQL or MariaDB</td><td>None</td></tr>
+  </table></div>
+  <p>How the portal moves safely:</p>
+  <ol>
+    <li>Admin, chat and mcp leave the <code>t4a</code> database first, so the portal is its only owner</li>
+    <li>All MongoDB calls in the portal go behind one data-access module, still on MongoDB, released and tested on its own</li>
+    <li>Postgres implementation behind that module: products and feed payloads as jsonb with indexes on the fields queries use, the 9 aggregations rewritten as SQL</li>
+    <li>A copy script moves the data; exports from both databases are compared before the switch</li>
+    <li>Switch in a maintenance window announced from Slack; MongoDB stays read-only for two weeks as the rollback</li>
+  </ol>
+  <ul class="tasks">
+    <li><input type="checkbox"><span>Sizes measured from the repos on 2026-10-25; re-check before each app starts</span></li>
+    <li><input type="checkbox"><span>Phase 5 starts after the migration in Phase 4</span></li>
+    <li><input type="checkbox"><span>When the last app is off: switch MongoDB off and drop it from the backups</span></li>
+  </ul>
+
+  <h2>Waiting on you</h2>
+  <p>These block the next steps; the first one matters even if nothing else moves.</p>
+  <ul class="tasks">
+    <li><input type="checkbox" checked><span>Go-ahead for Phase 0 on T-2 (backup fix, closing ports): the most urgent item in this plan</span></li>
+    <li><input type="checkbox"><span>Save <code>PGBACKREST_REPO1_CIPHER_PASS</code> (in /srv/postgres/.env on Hetzner) and /root/.restic-password in your password manager; without them no backup can be read</span></li>
+    <li><input type="checkbox"><span>Review and merge <a href="https://github.com/time-4-action/t4a-infra/pull/3">t4a-infra PR #3</a></span></li>
+    <li><input type="checkbox"><span>Decide: n8n and t4a-mcp are down. Revive them on Hetzner, or retire them and their domains</span></li>
+    <li><input type="checkbox"><span>Confirm with T-2 that email (MX mx1.t-2.si) stays when the server is cancelled</span></li>
+    <li class="done"><input type="checkbox" checked><span>Slack app and channel for alerts (Phase 1)</span></li>
+    <li><input type="checkbox"><span>Logins for Beszel and Uptime Kuma on T-2 (Phase 2)</span></li>
+    <li><input type="checkbox"><span>Decide: remove the old server config copy from the jakamarinko repo</span></li>
+  </ul>
+</main>
+<script>
+  // Ticked boxes and the theme are remembered in this browser only.
+  (function () {
+    var KEY = 't4a-server-plan:tasks-v2', THEME = 't4a-server-plan:theme';
+    function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('ul.tasks input'));
+    var saved = {};
+    try { saved = JSON.parse(load(KEY) || '{}'); } catch (e) {}
+    boxes.forEach(function (box, i) {
+      var li = box.parentNode;
+      box.checked = i in saved ? !!saved[i] : box.checked;
+      li.classList.toggle('done', box.checked);
+      box.addEventListener('change', function () {
+        saved[i] = box.checked;
+        li.classList.toggle('done', box.checked);
+        save(KEY, JSON.stringify(saved));
+      });
+    });
+
+    var root = document.documentElement, theme = load(THEME);
+    if (theme) root.setAttribute('data-theme', theme);
+    document.getElementById('theme-toggle').addEventListener('click', function () {
+      var dark = root.getAttribute('data-theme') === 'dark' ||
+        (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = dark ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      save(THEME, next);
+    });
+  })();
+</script>
+</body>
+</html>
